@@ -195,7 +195,7 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 <div class="wrap">
   <div class="nav">
     <div>
-      <div class="ttl">Crypto Signal Scanner Pro aaaaaaaaaaaaaaaaaaaa</div>
+      <div class="ttl">Crypto Signal Scanner Pro sage</div>
       <div class="sub">RSI · EMA · MACD · Bollinger · Volumen + Backtesting</div>
     </div>
     <div class="nav-left">
@@ -226,7 +226,7 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
       </select>
       <div class="rdot" id="rdot"></div>
       <div class="sep"></div>
-      <button onclick="refreshAll()">↻ Actualizar</button>
+      <button onclick="testTelegram()" title="Probar conexión con Telegram">📱 Test</button>
       <select id="sort-by" onchange="sortCards()" style="padding:7px 10px;font-size:13px;border:1px solid #222;border-radius:8px;background:#111;color:#ccc;outline:none;cursor:pointer">
         <option value="score-desc">⇅ Señal ↓</option>
         <option value="score-asc">⇅ Señal ↑</option>
@@ -640,9 +640,22 @@ async function loadCoin(coin){
     if(!history_[coin])history_[coin]=[];
     history_[coin].unshift({time:new Date().toLocaleTimeString('es-PY'),score});
     if(history_[coin].length>10)history_[coin].pop();
-    checkAlert(coin,closes[closes.length-1]);
+    checkTriggers(coin,cdata[coin]);
     renderCard(coin,false,false);applyFilter();
   }catch(e){renderCard(coin,false,true);}
+}
+
+function testTelegram(){
+  sendTelegram(
+    `✅ <b>Scanner conectado!</b>\n`+
+    `Tu Crypto Signal Scanner está listo.\n\n`+
+    `Recibirás alertas cuando:\n`+
+    `🔥 RSI &lt; 35 + OBV acumulando\n`+
+    `⚡ Volume spike &gt; 3x\n`+
+    `🚨 RSI &gt; 70 + OBV distribuyendo\n`+
+    `💎 Puntaje +4 o +5\n`+
+    `📉 Puntaje -4 o -5`
+  ).then(()=>showToast('✅ Mensaje enviado a Telegram!'));
 }
 
 function checkAlert(coin,price){
@@ -650,6 +663,7 @@ function checkAlert(coin,price){
   const{target,dir}=alerts[coin];
   if((dir==='below'&&price<=target)||(dir==='above'&&price>=target)){
     showToast(`ALERTA: ${coin} llegó a $${fmtPrice(price)}!`,'warn');
+    sendTelegram(`💰 <b>ALERTA DE PRECIO</b>\n${coin}/USDT llegó a $${fmtPrice(price)}\nTarget era: $${fmtPrice(target)}`);
     if(Notification.permission==='granted')new Notification(`${coin} alerta!`,{body:`Precio: $${fmtPrice(price)}`});
     delete alerts[coin];
   }
@@ -1170,6 +1184,109 @@ function showToast(msg,type=''){const t=document.getElementById('toast');t.textC
 
 const SUPA_URL='https://ecgdswroygkfckkaguxp.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjZ2Rzd3JveWdrZmNra2FndXhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTUyNzEsImV4cCI6MjA4OTA5MTI3MX0.N_qJsJWTJaqRHpugzlnRTpoZI84mUoctt3RKmUshIrU';
+const TG_TOKEN='8521701026:AAH7tNR4hMf5iR-xS9UgHnQYlrUKnd4Anl8';
+const TG_CHAT='8576536483';
+const sentAlerts={};
+
+async function sendTelegram(msg){
+  try{
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:TG_CHAT,text:msg,parse_mode:'HTML'})
+    });
+  }catch(e){}
+}
+
+function checkTriggers(coin,d){
+  const now=Date.now();
+  const cooldown=5*60*1000;
+  const key=(type)=>`${coin}_${type}`;
+  const canSend=(type)=>!sentAlerts[key(type)]||(now-sentAlerts[key(type)])>cooldown;
+  const mark=(type)=>{sentAlerts[key(type)]=now;};
+
+  const rsi=d.rsiVal;
+  const obv=d.obv?d.obv.trend:'flat';
+  const spike=d.spike?d.spike.ratio:0;
+  const score=d.score;
+  const px=fmtPrice(d.price);
+
+  // 🔥 Mean Reversion Signal — RSI < 35 + OBV acumulando
+  if(rsi!==null&&rsi<35&&obv==='up'&&canSend('mr')){
+    mark('mr');
+    sendTelegram(
+      `🔥 <b>MEAN REVERSION SIGNAL</b>\n`+
+      `Moneda: <b>${coin}/USDT</b>\n`+
+      `Precio: $${px}\n`+
+      `RSI: ${rsi.toFixed(1)} (oversold ✅)\n`+
+      `OBV: acumulando ↑ ✅\n`+
+      `Puntaje: ${score>0?'+':''}${score}\n`+
+      `→ Posible rebote próximo`
+    );
+    showToast(`📱 Telegram: ${coin} Mean Reversion Signal!`,'warn');
+  }
+
+  // ⚡ Volume Spike fuerte + vela verde
+  if(spike>=3&&d.spike&&d.spike.up&&canSend('spike')){
+    mark('spike');
+    sendTelegram(
+      `⚡ <b>VOLUME SPIKE ALERT</b>\n`+
+      `Moneda: <b>${coin}/USDT</b>\n`+
+      `Precio: $${px}\n`+
+      `Spike: ${spike.toFixed(1)}x el promedio 🔥\n`+
+      `VROC: ${d.spike.vroc>=0?'+':''}${d.spike.vroc.toFixed(0)}%\n`+
+      `Dirección: vela verde ✅\n`+
+      `→ Compra masiva detectada`
+    );
+    showToast(`📱 Telegram: ${coin} Volume Spike ${spike.toFixed(1)}x!`,'warn');
+  }
+
+  // 🚨 Overbought Warning — RSI > 70 + OBV distribuyendo
+  if(rsi!==null&&rsi>70&&obv==='down'&&canSend('ob')){
+    mark('ob');
+    sendTelegram(
+      `🚨 <b>OVERBOUGHT WARNING</b>\n`+
+      `Moneda: <b>${coin}/USDT</b>\n`+
+      `Precio: $${px}\n`+
+      `RSI: ${rsi.toFixed(1)} (overbought ⚠️)\n`+
+      `OBV: distribuyendo ↓ ⚠️\n`+
+      `→ Posible caída próxima — no compres`
+    );
+    showToast(`📱 Telegram: ${coin} Overbought Warning!`,'err');
+  }
+
+  // 💎 Strong Buy — puntaje +4 o +5
+  if(score>=4&&canSend('strong')){
+    mark('strong');
+    sendTelegram(
+      `💎 <b>STRONG BUY SIGNAL</b>\n`+
+      `Moneda: <b>${coin}/USDT</b>\n`+
+      `Precio: $${px}\n`+
+      `Puntaje: <b>${score>0?'+':''}${score}/+5</b> ✅\n`+
+      `RSI: ${rsi!==null?rsi.toFixed(1):'—'}\n`+
+      `OBV: ${obv==='up'?'acumulando ✅':obv==='down'?'distribuyendo ⚠️':'lateral'}\n`+
+      `→ Todos los indicadores alineados`
+    );
+    showToast(`📱 Telegram: ${coin} Strong Buy +${score}!`,'warn');
+  }
+
+  // 📉 Strong Sell — puntaje -4 o -5
+  if(score<=-4&&canSend('sell')){
+    mark('sell');
+    sendTelegram(
+      `📉 <b>STRONG SELL SIGNAL</b>\n`+
+      `Moneda: <b>${coin}/USDT</b>\n`+
+      `Precio: $${px}\n`+
+      `Puntaje: <b>${score}/-5</b> ❌\n`+
+      `RSI: ${rsi!==null?rsi.toFixed(1):'—'}\n`+
+      `→ Todos los indicadores bajistas`
+    );
+    showToast(`📱 Telegram: ${coin} Strong Sell ${score}!`,'err');
+  }
+
+  // 💰 Price Alert manual
+  checkAlert(coin,d.price);
+}
 const SUPA_HEADERS={'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};
 
 async function saveState(){

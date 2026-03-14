@@ -157,22 +157,25 @@ def fetch_klines(symbol, interval="4h", limit=100):
             return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
     except: pass
 
-    # 3. Fallback: KuCoin
-    interval_map = {"1h": "1hour", "4h": "4hour", "1d": "1day"}
-    kc_interval = interval_map.get(interval, "4hour")
-    url = f"https://api.kucoin.com/api/v1/market/candles"
-    params = {"symbol": f"{symbol}-USDT", "type": kc_interval}
+    # 3. Fallback: Bybit
+    # Bybit interval map: 1h=60, 4h=240, 1d=D
+    interval_map = {"1h": "60", "4h": "240", "1d": "D"}
+    bybit_interval = interval_map.get(interval, "240")
+    url = "https://api.bybit.com/v5/market/kline"
+    params = {"symbol": f"{symbol}USDT", "interval": bybit_interval, "limit": limit}
     r = requests.get(url, params=params, timeout=10)
     r.raise_for_status()
     data = r.json()
-    if data.get("code") != "200000":
-        raise Exception(f"KuCoin error: {data}")
-    # KuCoin format: [timestamp, open, close, high, low, volume, turnover]
-    # Returns newest first — reverse to get oldest first
-    rows = list(reversed(data["data"]))[-limit:]
-    closes = [float(row[2]) for row in rows]   # close
-    vols   = [float(row[6]) for row in rows]   # turnover (USDT value) — better for spike detection
+    if data.get("retCode") != 0:
+        raise Exception(f"Bybit error: {data.get('retMsg')}")
+    # Bybit format: [timestamp, open, high, low, close, volume, turnover]
+    # Returns newest first — reverse to oldest first
+    rows = list(reversed(data["result"]["list"]))
+    closes = [float(row[4]) for row in rows]   # close
+    vols   = [float(row[6]) for row in rows]   # turnover in USDT
     return closes, vols
+
+
 
 # ============ TELEGRAM ============
 

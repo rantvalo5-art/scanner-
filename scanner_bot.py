@@ -137,12 +137,38 @@ def fmt_price(p):
 # ============ BINANCE ============
 
 def fetch_klines(symbol, interval="4h", limit=100):
-    url = f"{BINANCE_BASE}/klines"
-    params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit}
+    # 1. Try Binance global
+    try:
+        url = f"{BINANCE_BASE}/klines"
+        params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit}
+        r = requests.get(url, params=params, timeout=10)
+        if r.status_code == 200:
+            rows = r.json()
+            return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
+    except: pass
+
+    # 2. Try Binance US
+    try:
+        url = f"https://api.binance.us/api/v3/klines"
+        params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit}
+        r = requests.get(url, params=params, timeout=10)
+        if r.status_code == 200:
+            rows = r.json()
+            return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
+    except: pass
+
+    # 3. Fallback: KuCoin
+    interval_map = {"1h": "1hour", "4h": "4hour", "1d": "1day"}
+    kc_interval = interval_map.get(interval, "4hour")
+    url = f"https://api.kucoin.com/api/v1/market/candles"
+    params = {"symbol": f"{symbol}-USDT", "type": kc_interval}
     r = requests.get(url, params=params, timeout=10)
     r.raise_for_status()
-    rows = r.json()
-    closes = [float(row[4]) for row in rows]
+    data = r.json()
+    if data.get("code") != "200000":
+        raise Exception(f"KuCoin error: {data}")
+    rows = list(reversed(data["data"]))[-limit:]
+    closes = [float(row[2]) for row in rows]
     vols   = [float(row[5]) for row in rows]
     return closes, vols
 

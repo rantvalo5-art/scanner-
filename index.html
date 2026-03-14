@@ -580,7 +580,13 @@ function fmtMACD(v){
   if(a>=0.000001)return v.toFixed(9);
   return v.toExponential(2);
 }
-function fmtPrice(p){return p<0.0001?p.toFixed(7):p<0.01?p.toFixed(6):p<1?p.toFixed(4):p<1000?p.toFixed(2):p.toLocaleString('en-US',{maximumFractionDigits:0});}
+function fmtPrice(p){return p<0.000001?p.toFixed(9):p<0.0001?p.toFixed(7):p<0.01?p.toFixed(6):p<1?p.toFixed(4):p<1000?p.toFixed(3):p.toLocaleString('en-US',{maximumFractionDigits:0});}
+function fmtTarget(p){
+  // Preserve exact precision for alert targets
+  const s=p.toString();
+  if(s.includes('.'))return s;
+  return fmtPrice(p);
+}
 function fmtDate(ts){const d=new Date(ts);return d.toLocaleDateString('es-PY',{month:'short',day:'numeric'});}
 
 /* ============ SCANNER ============ */
@@ -794,13 +800,14 @@ function checkAlert(coin,price){
 }
 function setAlert(coin){
   const inp=document.getElementById('ai-'+coin);
-  const val=parseFloat(inp.value);
-  if(!val||isNaN(val))return;
+  const raw=inp.value.trim().replace(',','.');
+  const val=parseFloat(raw);
+  if(!val||isNaN(val)){showToast('Precio inválido — usa punto decimal (ej: 1.415)','err');return;}
   const current=cdata[coin]?cdata[coin].price:0;
   const dir=val<current?'below':'above';
   const arrow=dir==='below'?'↓ baja de':'↑ sube a';
   if(!alerts[coin])alerts[coin]=[];
-  alerts[coin].push({target:val,dir});
+  alerts[coin].push({target:val,targetStr:raw,dir});
   inp.value='';
   renderCard(coin,false,false);
   if(stateLoaded)saveState();
@@ -861,15 +868,16 @@ function renderCard(coin,loading,err){
     const alertListHTML=coinAlerts.map((a,i)=>{
       const arrow=a.dir==='below'?'↓':'↑';
       const cls=a.dir==='below'?'ir':'ib';
+      const tStr=a.targetStr||fmtTarget(a.target);
       return`<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
-        <span class="${cls}" style="font-size:10px">${arrow} $${fmtPrice(a.target)}</span>
+        <span class="${cls}" style="font-size:10px">${arrow} $${tStr}</span>
         <span onclick="clearAlert('${coin}',${i})" style="font-size:10px;color:#636b78;cursor:pointer;padding:0 3px">×</span>
       </div>`;
     }).join('');
     const alertHTML=`<div class="alert-row" style="flex-direction:column;align-items:stretch;gap:5px">
       ${alertListHTML}
       <div style="display:flex;gap:5px">
-        <input class="alert-inp" id="ai-${coin}" placeholder="Precio target..." type="number" step="any" style="flex:1"/>
+        <input class="alert-inp" id="ai-${coin}" placeholder="Ej: 1.415" type="text" inputmode="decimal" style="flex:1"/>
         <button class="alert-btn" onclick="setAlert('${coin}')">+ Alerta</button>
       </div>
     </div>`;
@@ -888,7 +896,13 @@ function renderCard(coin,loading,err){
   }
   const empty=document.getElementById('empty-msg');if(empty)empty.remove();
   if(isNew)document.getElementById('grid').appendChild(card);
-  if(!loading&&!err&&cdata[coin])setTimeout(()=>drawChart('spark-'+coin,cdata[coin]),50);
+  if(!loading&&!err&&cdata[coin]){
+    setTimeout(()=>{
+      drawChart('spark-'+coin,cdata[coin]);
+      const ai=document.getElementById('ai-'+coin);
+      if(ai)ai.addEventListener('keydown',e=>{if(e.key==='Enter')setAlert(coin);});
+    },50);
+  }
 }
 
 let currentView='cards';
@@ -1477,10 +1491,11 @@ function renderPriceAlerts(){
       const arrow=a.dir==='below'?'↓':'↑';
       const label=a.dir==='below'?'baja de':'sube a';
       const cls=a.dir==='below'?'down':'up';
+      const tStr=a.targetStr||fmtTarget(a.target);
       return`<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#1e2128;border-radius:7px;border:1px solid #2e3340;margin-bottom:5px">
         <div style="font-weight:700;color:#fff;min-width:50px">${coin}</div>
         <div style="font-size:12px;color:#7a8290">cuando</div>
-        <div class="tbl ${cls}" style="font-weight:600">${arrow} ${label} $${fmtPrice(a.target)}</div>
+        <div class="tbl ${cls}" style="font-weight:600">${arrow} ${label} $${tStr}</div>
         <div style="font-size:11px;color:#4a5260;margin-left:4px">· actual: ${currentStr}</div>
         <button onclick="clearAlert('${coin}',${i});renderPriceAlerts();" style="margin-left:auto;padding:3px 8px;font-size:11px;border:1px solid #3d4452;border-radius:6px;background:transparent;color:#636b78;cursor:pointer">× quitar</button>
       </div>`;

@@ -195,7 +195,7 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 <div class="wrap">
   <div class="nav">
     <div>
-      <div class="ttl">Crypto Signal Scanner Pro ueno bank</div>
+      <div class="ttl">Crypto Signal Scanner Pro itau</div>
       <div class="sub">RSI · EMA · MACD · Bollinger · Volumen + Backtesting</div>
     </div>
     <div class="nav-left">
@@ -1091,8 +1091,47 @@ function showPage(id){
 
 function showToast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
 
+function saveState(){
+  try{
+    localStorage.setItem('scanner_coins',JSON.stringify(coins));
+    const alertsToSave={};
+    Object.keys(alerts).forEach(k=>{alertsToSave[k]=alerts[k];});
+    localStorage.setItem('scanner_alerts',JSON.stringify(alertsToSave));
+    localStorage.setItem('scanner_tf',document.getElementById('tf').value);
+  }catch(e){}
+}
+
+function loadState(){
+  try{
+    const savedTF=localStorage.getItem('scanner_tf');
+    if(savedTF){document.getElementById('tf').value=savedTF;}
+    const savedAlerts=localStorage.getItem('scanner_alerts');
+    if(savedAlerts){const a=JSON.parse(savedAlerts);Object.keys(a).forEach(k=>{alerts[k]=a[k];});}
+    const savedCoins=localStorage.getItem('scanner_coins');
+    if(savedCoins){
+      const c=JSON.parse(savedCoins);
+      if(c&&c.length){
+        showToast('Cargando monedas guardadas...');
+        c.forEach(coin=>quickAdd(coin));
+        return true;
+      }
+    }
+  }catch(e){}
+  return false;
+}
+
+const _origQuickAdd=quickAdd;
+quickAdd=function(c){_origQuickAdd(c);saveState();};
+
+const _origRemoveCoin=removeCoin;
+removeCoin=function(coin){_origRemoveCoin(coin);saveState();};
+
+document.getElementById('tf').addEventListener('change',saveState);
 document.getElementById('ci').addEventListener('keydown',e=>{if(e.key==='Enter')addCoin();});
 loadMarket();
+const hadSaved=loadState();
+if(!hadSaved){showToast('Agrega monedas para comenzar');}
+
 </script>
 </body>
 </html>

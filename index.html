@@ -209,7 +209,7 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 <div class="wrap">
   <div class="nav">
     <div>
-      <div class="ttl">Crypto Signal Scanner Pro ueno</div>
+      <div class="ttl">Crypto Signal Scanner Pro</div>
       <div class="sub">RSI · EMA · MACD · Bollinger · Volumen + Backtesting</div>
     </div>
     <div class="nav-left">
@@ -392,82 +392,45 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 
   <!-- =================== ALERTS PAGE =================== -->
   <div class="page" id="page-alerts">
-    <div style="max-width:700px">
-
-      <!-- TEST + STATUS -->
+    <div style="max-width:760px">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap">
         <button onclick="testTelegram()" style="padding:8px 16px;font-size:13px;border:1px solid #4a7c2f;border-radius:8px;background:#1e3a0f;color:#7bc142;cursor:pointer;font-weight:600">📱 Probar Telegram</button>
-        <div style="font-size:12px;color:#444">Las alertas se envían a Telegram cuando el scanner está abierto y auto-refresh activado</div>
+        <div style="font-size:12px;color:#444">Las alertas llegan a Telegram mientras el scanner esté abierto con auto-refresh activado</div>
       </div>
-
-      <!-- GLOBAL TRIGGERS -->
-      <div class="bt-controls" style="flex-direction:column;gap:14px">
+      <div class="bt-controls" style="flex-direction:column;gap:11px">
         <div style="font-size:13px;font-weight:600;color:#888">Triggers globales — aplican a TODAS las monedas</div>
-
-        <div class="al-row" id="alrow-mr">
-          <div class="al-toggle" onclick="toggleGlobal('mr')" id="altog-mr">OFF</div>
-          <div class="al-info">
-            <div class="al-name">🔥 Mean Reversion</div>
-            <div class="al-desc">RSI baja de <input class="al-inp" id="al-mr-rsi" value="35" type="number" min="10" max="50"> + OBV acumulando</div>
-          </div>
-        </div>
-
-        <div class="al-row" id="alrow-spike">
-          <div class="al-toggle" onclick="toggleGlobal('spike')" id="altog-spike">OFF</div>
-          <div class="al-info">
-            <div class="al-name">⚡ Volume Spike</div>
-            <div class="al-desc">Spike mayor a <input class="al-inp" id="al-spike-x" value="3" type="number" min="1.5" max="20" step="0.5">x el promedio + vela verde</div>
-          </div>
-        </div>
-
-        <div class="al-row" id="alrow-ob">
-          <div class="al-toggle" onclick="toggleGlobal('ob')" id="altog-ob">OFF</div>
-          <div class="al-info">
-            <div class="al-name">🚨 Overbought</div>
-            <div class="al-desc">RSI sube de <input class="al-inp" id="al-ob-rsi" value="70" type="number" min="60" max="90"> + OBV distribuyendo</div>
-          </div>
-        </div>
-
-        <div class="al-row" id="alrow-strong">
-          <div class="al-toggle" onclick="toggleGlobal('strong')" id="altog-strong">OFF</div>
-          <div class="al-info">
-            <div class="al-name">💎 Strong Buy</div>
-            <div class="al-desc">Puntaje llega a <input class="al-inp" id="al-strong-score" value="4" type="number" min="2" max="5"> o más</div>
-          </div>
-        </div>
-
-        <div class="al-row" id="alrow-sell">
-          <div class="al-toggle" onclick="toggleGlobal('sell')" id="altog-sell">OFF</div>
-          <div class="al-info">
-            <div class="al-name">📉 Strong Sell</div>
-            <div class="al-desc">Puntaje llega a <input class="al-inp" id="al-sell-score" value="-4" type="number" min="-5" max="-2"> o menos</div>
-          </div>
-        </div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('rsi_low')" id="altog-rsi_low">OFF</div><div class="al-info"><div class="al-name">📉 RSI Bajo</div><div class="al-desc">RSI baja de <input class="al-inp" id="al-rsi-low-val" value="30" type="number" min="10" max="50"> (oversold — solo)</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('rsi_high')" id="altog-rsi_high">OFF</div><div class="al-info"><div class="al-name">📈 RSI Alto</div><div class="al-desc">RSI sube de <input class="al-inp" id="al-rsi-high-val" value="70" type="number" min="60" max="95"> (overbought — solo)</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('obv_up')" id="altog-obv_up">OFF</div><div class="al-info"><div class="al-name">↑ OBV Acumulando</div><div class="al-desc">OBV cambia a tendencia alcista (compradores entrando — solo)</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('obv_down')" id="altog-obv_down">OFF</div><div class="al-info"><div class="al-name">↓ OBV Distribuyendo</div><div class="al-desc">OBV cambia a tendencia bajista (vendedores saliendo — solo)</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('spike_solo')" id="altog-spike_solo">OFF</div><div class="al-info"><div class="al-name">⚡ Volume Spike</div><div class="al-desc">Spike mayor a <input class="al-inp" id="al-spike-solo-x" value="3" type="number" min="1.5" max="20" step="0.5">x promedio (cualquier dirección)</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('spike_green')" id="altog-spike_green">OFF</div><div class="al-info"><div class="al-name">⚡ Volume Spike Verde</div><div class="al-desc">Spike mayor a <input class="al-inp" id="al-spike-green-x" value="3" type="number" min="1.5" max="20" step="0.5">x + vela verde (compra masiva)</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('macd_up')" id="altog-macd_up">OFF</div><div class="al-info"><div class="al-name">📊 MACD Cruce Alcista</div><div class="al-desc">Histograma MACD cruza de negativo a positivo (momentum cambia a alcista)</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('macd_down')" id="altog-macd_down">OFF</div><div class="al-info"><div class="al-name">📊 MACD Cruce Bajista</div><div class="al-desc">Histograma MACD cruza de positivo a negativo (momentum cambia a bajista)</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('mr')" id="altog-mr">OFF</div><div class="al-info"><div class="al-name">🔥 Mean Reversion</div><div class="al-desc">RSI &lt; <input class="al-inp" id="al-mr-rsi" value="35" type="number" min="10" max="50"> + OBV acumulando (combinado)</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('ob')" id="altog-ob">OFF</div><div class="al-info"><div class="al-name">🚨 Overbought Combo</div><div class="al-desc">RSI &gt; <input class="al-inp" id="al-ob-rsi" value="70" type="number" min="60" max="90"> + OBV distribuyendo (combinado)</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('strong')" id="altog-strong">OFF</div><div class="al-info"><div class="al-name">💎 Strong Buy</div><div class="al-desc">Puntaje total llega a <input class="al-inp" id="al-strong-score" value="4" type="number" min="2" max="5"> o más</div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('sell')" id="altog-sell">OFF</div><div class="al-info"><div class="al-name">📉 Strong Sell</div><div class="al-desc">Puntaje total llega a <input class="al-inp" id="al-sell-score" value="-4" type="number" min="-5" max="-2"> o menos</div></div></div>
       </div>
-
-      <!-- PER COIN TRIGGERS -->
-      <div class="bt-controls" style="flex-direction:column;gap:12px;margin-top:12px">
+      <div class="bt-controls" style="flex-direction:column;gap:10px;margin-top:12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div style="font-size:13px;font-weight:600;color:#888">Triggers por moneda individual</div>
-          <button onclick="renderCoinAlerts()" style="font-size:11px;padding:4px 10px;border:1px solid #333;border-radius:6px;background:#111;color:#666;cursor:pointer">↻ Actualizar lista</button>
+          <button onclick="renderCoinAlerts()" style="font-size:11px;padding:4px 10px;border:1px solid #333;border-radius:6px;background:#111;color:#666;cursor:pointer">↻ Actualizar</button>
         </div>
-        <div id="coin-alerts-list">
-          <div style="font-size:12px;color:#444">Agrega monedas en el Scanner primero, luego vuelve aquí.</div>
-        </div>
+        <div style="font-size:11px;color:#444;margin-top:-4px">Click en cada chip para activar solo para esa moneda</div>
+        <div id="coin-alerts-list"><div style="font-size:12px;color:#444">Agrega monedas en el Scanner primero.</div></div>
       </div>
-
-      <!-- COOLDOWN -->
-      <div class="bt-controls" style="margin-top:12px;align-items:center">
-        <div style="font-size:13px;color:#888">Cooldown entre alertas:</div>
+      <div class="bt-controls" style="margin-top:12px;align-items:center;gap:12px">
+        <div style="font-size:13px;color:#888;flex-shrink:0">Cooldown:</div>
         <select id="al-cooldown" style="padding:6px 10px;font-size:13px;border:1px solid #222;border-radius:8px;background:#0d0d0d;color:#e0e0e0;outline:none">
-          <option value="300000">5 minutos</option>
+          <option value="60000">1 minuto</option>
+          <option value="300000" selected>5 minutos</option>
           <option value="900000">15 minutos</option>
           <option value="1800000">30 minutos</option>
           <option value="3600000">1 hora</option>
         </select>
         <div style="font-size:11px;color:#444">Tiempo mínimo entre el mismo tipo de alerta para la misma moneda</div>
       </div>
-
     </div>
   </div>
 </div>
@@ -1318,9 +1281,16 @@ function renderCoinAlerts(){
   const container=document.getElementById('coin-alerts-list');
   if(!coins.length){container.innerHTML='<div style="font-size:12px;color:#444">Agrega monedas en el Scanner primero.</div>';return;}
   const types=[
+    {k:'rsi_low',label:'📉 RSI Bajo'},
+    {k:'rsi_high',label:'📈 RSI Alto'},
+    {k:'obv_up',label:'↑ OBV Acum'},
+    {k:'obv_down',label:'↓ OBV Dist'},
+    {k:'spike_solo',label:'⚡ Spike'},
+    {k:'spike_green',label:'⚡ Spike Verde'},
+    {k:'macd_up',label:'📊 MACD ↑'},
+    {k:'macd_down',label:'📊 MACD ↓'},
     {k:'mr',label:'🔥 MR'},
-    {k:'spike',label:'⚡ Spike'},
-    {k:'ob',label:'🚨 OB'},
+    {k:'ob',label:'🚨 OB Combo'},
     {k:'strong',label:'💎 Buy'},
     {k:'sell',label:'📉 Sell'},
   ];
@@ -1330,7 +1300,7 @@ function renderCoinAlerts(){
       const on=coinTriggers[coin][t.k]||false;
       return`<div class="coin-al-chip${on?' on':''}" id="cal-${coin}-${t.k}" onclick="toggleCoin('${coin}','${t.k}')">${t.label}</div>`;
     }).join('');
-    return`<div class="coin-al-row"><div class="coin-al-name">${coin}</div>${chips}</div>`;
+    return`<div class="coin-al-row"><div class="coin-al-name">${coin}</div><div style="display:flex;gap:5px;flex-wrap:wrap">${chips}</div></div>`;
   }).join('');
 }
 
@@ -1355,40 +1325,49 @@ function checkTriggers(coin,d){
 
   const rsi=d.rsiVal;
   const obv=d.obv?d.obv.trend:'flat';
+  const prevObv=d.obv?d.obv.prevTrend||'flat':'flat';
   const spike=d.spike?d.spike.ratio:0;
   const score=d.score;
   const px=fmtPrice(d.price);
+  const macdH=d.sigs?d.sigs.find(s=>s.l==='MACD'):null;
+  const macdUp=macdH&&macdH.t==='b';
+  const macdDown=macdH&&macdH.t==='r';
+  const prevMacd=d.prevMacdDir||null;
+
+  const rsiLow=parseFloat(document.getElementById('al-rsi-low-val')?document.getElementById('al-rsi-low-val').value:30);
+  const rsiHigh=parseFloat(document.getElementById('al-rsi-high-val')?document.getElementById('al-rsi-high-val').value:70);
+  const spikeSoloX=parseFloat(document.getElementById('al-spike-solo-x')?document.getElementById('al-spike-solo-x').value:3);
+  const spikeGreenX=parseFloat(document.getElementById('al-spike-green-x')?document.getElementById('al-spike-green-x').value:3);
   const mrRSI=parseFloat(document.getElementById('al-mr-rsi')?document.getElementById('al-mr-rsi').value:35);
-  const spikeX=parseFloat(document.getElementById('al-spike-x')?document.getElementById('al-spike-x').value:3);
   const obRSI=parseFloat(document.getElementById('al-ob-rsi')?document.getElementById('al-ob-rsi').value:70);
   const strongScore=parseInt(document.getElementById('al-strong-score')?document.getElementById('al-strong-score').value:4);
   const sellScore=parseInt(document.getElementById('al-sell-score')?document.getElementById('al-sell-score').value:-4);
 
-  if(rsi!==null&&rsi<mrRSI&&obv==='up'&&canSend('mr')){
-    mark('mr');
-    sendTelegram(`🔥 <b>MEAN REVERSION</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (oversold ✅)\nOBV: acumulando ↑\nPuntaje: ${score>0?'+':''}${score}`);
-    showToast(`📱 ${coin} Mean Reversion!`,'warn');
-  }
-  if(spike>=spikeX&&d.spike&&d.spike.up&&canSend('spike')){
-    mark('spike');
-    sendTelegram(`⚡ <b>VOLUME SPIKE</b>\n<b>${coin}/USDT</b> — $${px}\nSpike: ${spike.toFixed(1)}x promedio 🔥\nVROC: ${d.spike.vroc>=0?'+':''}${d.spike.vroc.toFixed(0)}%`);
-    showToast(`📱 ${coin} Spike ${spike.toFixed(1)}x!`,'warn');
-  }
-  if(rsi!==null&&rsi>obRSI&&obv==='down'&&canSend('ob')){
-    mark('ob');
-    sendTelegram(`🚨 <b>OVERBOUGHT</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (overbought)\nOBV: distribuyendo ↓`);
-    showToast(`📱 ${coin} Overbought!`,'err');
-  }
-  if(score>=strongScore&&canSend('strong')){
-    mark('strong');
-    sendTelegram(`💎 <b>STRONG BUY</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: <b>${score>0?'+':''}${score}/+5</b>\nRSI: ${rsi!==null?rsi.toFixed(1):'—'}`);
-    showToast(`📱 ${coin} Strong Buy +${score}!`,'warn');
-  }
-  if(score<=sellScore&&canSend('sell')){
-    mark('sell');
-    sendTelegram(`📉 <b>STRONG SELL</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: <b>${score}/-5</b>`);
-    showToast(`📱 ${coin} Strong Sell ${score}!`,'err');
-  }
+  // RSI solo
+  if(rsi!==null&&rsi<rsiLow&&canSend('rsi_low')){mark('rsi_low');sendTelegram(`📉 <b>RSI BAJO</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (oversold ✅)`);showToast(`📱 ${coin} RSI bajo ${rsi.toFixed(1)}`,'warn');}
+  if(rsi!==null&&rsi>rsiHigh&&canSend('rsi_high')){mark('rsi_high');sendTelegram(`📈 <b>RSI ALTO</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (overbought ⚠️)`);showToast(`📱 ${coin} RSI alto ${rsi.toFixed(1)}`,'warn');}
+
+  // OBV solo
+  if(obv==='up'&&prevObv!=='up'&&canSend('obv_up')){mark('obv_up');sendTelegram(`↑ <b>OBV ACUMULANDO</b>\n<b>${coin}/USDT</b> — $${px}\nOBV cambió a tendencia alcista\nCompradores entrando silenciosamente`);showToast(`📱 ${coin} OBV acumulando`,'warn');}
+  if(obv==='down'&&prevObv!=='down'&&canSend('obv_down')){mark('obv_down');sendTelegram(`↓ <b>OBV DISTRIBUYENDO</b>\n<b>${coin}/USDT</b> — $${px}\nOBV cambió a tendencia bajista\nVendedores saliendo silenciosamente`);showToast(`📱 ${coin} OBV distribuyendo`,'err');}
+
+  // Volume Spike solo
+  if(spike>=spikeSoloX&&canSend('spike_solo')){mark('spike_solo');sendTelegram(`⚡ <b>VOLUME SPIKE</b>\n<b>${coin}/USDT</b> — $${px}\nSpike: ${spike.toFixed(1)}x promedio\nVROC: ${d.spike?d.spike.vroc>=0?'+':''+(d.spike.vroc||0).toFixed(0):0}%`);showToast(`📱 ${coin} Spike ${spike.toFixed(1)}x`,'warn');}
+  if(spike>=spikeGreenX&&d.spike&&d.spike.up&&canSend('spike_green')){mark('spike_green');sendTelegram(`⚡ <b>VOLUME SPIKE VERDE</b>\n<b>${coin}/USDT</b> — $${px}\nSpike: ${spike.toFixed(1)}x + vela verde 🔥\nCompra masiva detectada`);showToast(`📱 ${coin} Spike verde ${spike.toFixed(1)}x`,'warn');}
+
+  // MACD cross solo
+  if(macdUp&&prevMacd==='r'&&canSend('macd_up')){mark('macd_up');sendTelegram(`📊 <b>MACD CRUCE ALCISTA</b>\n<b>${coin}/USDT</b> — $${px}\nHistograma cruzó de negativo a positivo\nMomentum cambia a alcista ✅`);showToast(`📱 ${coin} MACD cruce ↑`,'warn');}
+  if(macdDown&&prevMacd==='b'&&canSend('macd_down')){mark('macd_down');sendTelegram(`📊 <b>MACD CRUCE BAJISTA</b>\n<b>${coin}/USDT</b> — $${px}\nHistograma cruzó de positivo a negativo\nMomentum cambia a bajista ⚠️`);showToast(`📱 ${coin} MACD cruce ↓`,'err');}
+
+  // Combined
+  if(rsi!==null&&rsi<mrRSI&&obv==='up'&&canSend('mr')){mark('mr');sendTelegram(`🔥 <b>MEAN REVERSION</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} ✅ OBV: acumulando ↑\nPuntaje: ${score>0?'+':''}${score}`);showToast(`📱 ${coin} Mean Reversion!`,'warn');}
+  if(rsi!==null&&rsi>obRSI&&obv==='down'&&canSend('ob')){mark('ob');sendTelegram(`🚨 <b>OVERBOUGHT COMBO</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} ⚠️ OBV: distribuyendo ↓`);showToast(`📱 ${coin} Overbought!`,'err');}
+  if(score>=strongScore&&canSend('strong')){mark('strong');sendTelegram(`💎 <b>STRONG BUY</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: <b>${score>0?'+':''}${score}/+5</b>\nRSI: ${rsi!==null?rsi.toFixed(1):'—'}`);showToast(`📱 ${coin} Strong Buy +${score}!`,'warn');}
+  if(score<=sellScore&&canSend('sell')){mark('sell');sendTelegram(`📉 <b>STRONG SELL</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: <b>${score}/-5</b>`);showToast(`📱 ${coin} Strong Sell ${score}!`,'err');}
+
+  // store prev states for cross detection next refresh
+  if(cdata[coin]){cdata[coin].prevMacdDir=macdUp?'b':macdDown?'r':null;if(d.obv)d.obv.prevTrend=obv;}
+
   checkAlert(coin,d.price);
 }
 const SUPA_HEADERS={'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};

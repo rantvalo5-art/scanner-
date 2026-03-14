@@ -578,9 +578,9 @@ async function runBacktest(){
   const sl=parseFloat(document.getElementById('bt-sl').value)/100;
   const btn=document.getElementById('bt-run-btn');
   btn.disabled=true;btn.textContent='Cargando...';
-  document.getElementById('bt-results').innerHTML=`<div class="bt-loading"><div class="bt-spinner"></div><div class="bt-loading-txt">Descargando 500 velas históricas de ${coin}...</div></div>`;
+  document.getElementById('bt-results').innerHTML=`<div class="bt-loading"><div class="bt-spinner"></div><div class="bt-loading-txt">Descargando 5000 velas históricas de ${coin}...</div></div>`;
   try{
-    const{closes,vols,rows}=await fetchTF(coin,tf,1000);
+    const{closes,vols,rows}=await fetchTF(coin,tf,5000);
     const trades=[];
     const WINDOW=35;
     let equity=1000;
@@ -683,7 +683,7 @@ function renderBacktestResults(coin,tf,trades,wins,losses,winRate,avgWin,avgLoss
       <div class="stat-card"><div class="stat-lbl">Ganancia promedio</div><div class="stat-val up">+${avgWin.toFixed(2)}%</div><div class="stat-sub">por trade ganador</div></div>
       <div class="stat-card"><div class="stat-lbl">Pérdida promedio</div><div class="stat-val down">-${avgLoss.toFixed(2)}%</div><div class="stat-sub">por trade perdedor</div></div>
       <div class="stat-card"><div class="stat-lbl">Max Drawdown</div><div class="stat-val ${maxDD<=15?'up':maxDD<=30?'neutral':'down'}">${maxDD.toFixed(1)}%</div><div class="stat-sub">caída máxima del equity</div></div>
-      <div class="stat-card"><div class="stat-lbl">Total trades</div><div class="stat-val white">${trades.length}</div><div class="stat-sub">en 1000 velas históricas</div></div>
+      <div class="stat-card"><div class="stat-lbl">Total trades</div><div class="stat-val white">${trades.length}</div><div class="stat-sub">en 5000 velas históricas</div></div>
       <div class="stat-card"><div class="stat-lbl">Veredicto</div><div class="stat-val ${reliable?'up':decent?'neutral':'down'}" style="font-size:14px">${reliable?'Confiable':decent?'Aceptable':'Débil'}</div><div class="stat-sub">${reliable?'Usar con confianza':decent?'Usar con cautela':'Ajustar parámetros'}</div></div>
     </div>
     <div class="eq-wrap">
@@ -741,14 +741,14 @@ async function runMeanReversion(){
   const sl=parseFloat(document.getElementById('mr-sl').value)/100;
   document.getElementById('bt-results').innerHTML=`<div class="bt-loading"><div class="bt-spinner"></div><div class="bt-loading-txt">Analizando ${coin} con Mean Reversion...</div></div>`;
   try{
-    const{closes,vols,rows}=await fetchTF(coin,tf,1000);
+    const{closes,vols,rows}=await fetchTF(coin,tf,5000);
     const result=calcMeanReversionTrades(closes,vols,rows,rsiIn,rsiOut,tp,sl);
     renderMRResults(coin,tf,result,rsiIn,rsiOut,tp,sl);
   }catch(e){document.getElementById('bt-results').innerHTML=`<div class="bt-empty">Error al cargar datos.</div>`;}
 }
 
 function calcMeanReversionTrades(closes,vols,rows,rsiIn,rsiOut,tp,sl){
-  const trades=[];let equity=1000;const equityCurve=[{t:rows[35][0],v:equity}];
+  const trades=[];let equity=1000;const equityCurve=[{t:rows[Math.min(35,rows.length-1)][0],v:equity}];
   let inTrade=false;let entryPrice=0;let entryIdx=0;
   for(let i=35;i<closes.length-1;i++){
     const wc=closes.slice(0,i+1);
@@ -836,7 +836,7 @@ async function runAutoTest(){
     document.getElementById('auto-progress-txt').textContent=`Testeando ${coin} ${tf.toUpperCase()}... (${done}/${total})`;
     document.getElementById('auto-progress-bar').style.width=(done/total*100)+'%';
     try{
-      const{closes,vols,rows}=await fetchTF(coin,tf,1000);
+      const{closes,vols,rows}=await fetchTF(coin,tf,5000);
 
       // Normal strategy +2
       document.getElementById('auto-progress-txt').textContent=`${coin} ${tf.toUpperCase()} — Estrategia Normal...`;
@@ -859,7 +859,7 @@ async function runAutoTest(){
 }
 
 function calcNormalTrades(closes,vols,rows,entryMin,tp,sl){
-  const trades=[];let equity=1000;const equityCurve=[{t:rows[35][0],v:equity}];
+  const trades=[];let equity=1000;const equityCurve=[{t:rows[Math.min(35,rows.length-1)][0],v:equity}];
   let inTrade=false;let entryPrice=0;let entryIdx=0;
   for(let i=35;i<closes.length-1;i++){
     const wc=closes.slice(0,i+1),wv=vols.slice(0,i+1);

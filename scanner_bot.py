@@ -167,9 +167,11 @@ def fetch_klines(symbol, interval="4h", limit=100):
     data = r.json()
     if data.get("code") != "200000":
         raise Exception(f"KuCoin error: {data}")
+    # KuCoin format: [timestamp, open, close, high, low, volume, turnover]
+    # Returns newest first — reverse to get oldest first
     rows = list(reversed(data["data"]))[-limit:]
-    closes = [float(row[2]) for row in rows]
-    vols   = [float(row[5]) for row in rows]
+    closes = [float(row[2]) for row in rows]   # close
+    vols   = [float(row[6]) for row in rows]   # turnover (USDT value) — better for spike detection
     return closes, vols
 
 # ============ TELEGRAM ============

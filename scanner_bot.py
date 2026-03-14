@@ -103,7 +103,6 @@ def calc_spike(vols, closes):
         return None
     avg = sum(vols[-20:]) / 20
     lv = vols[-1]
-    print(f"    DEBUG vol: last={lv:.2f} avg={avg:.2f} ratio={lv/avg if avg>0 else 0:.2f}")
     ratio = lv / avg if avg > 0 else 0
     vroc = ((lv - vols[-11]) / vols[-11] * 100) if len(vols) >= 11 and vols[-11] > 0 else 0
     up = closes[-1] >= closes[-2]
@@ -145,6 +144,8 @@ def fetch_klines(symbol, interval="4h", limit=100):
         r = requests.get(url, params=params, timeout=10)
         if r.status_code == 200:
             rows = r.json()
+            # Skip last candle (incomplete/current)
+            rows = rows[:-1]
             return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
     except: pass
 
@@ -155,25 +156,25 @@ def fetch_klines(symbol, interval="4h", limit=100):
         r = requests.get(url, params=params, timeout=10)
         if r.status_code == 200:
             rows = r.json()
+            rows = rows[:-1]
             return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
     except: pass
 
     # 3. Fallback: Bybit
-    # Bybit interval map: 1h=60, 4h=240, 1d=D
     interval_map = {"1h": "60", "4h": "240", "1d": "D"}
     bybit_interval = interval_map.get(interval, "240")
     url = "https://api.bybit.com/v5/market/kline"
-    params = {"symbol": f"{symbol}USDT", "interval": bybit_interval, "limit": limit}
+    params = {"symbol": f"{symbol}USDT", "interval": bybit_interval, "limit": limit + 1}
     r = requests.get(url, params=params, timeout=10)
     r.raise_for_status()
     data = r.json()
     if data.get("retCode") != 0:
         raise Exception(f"Bybit error: {data.get('retMsg')}")
-    # Bybit format: [timestamp, open, high, low, close, volume, turnover]
-    # Returns newest first — reverse to oldest first
+    # Bybit: newest first → reverse → skip last (incomplete current candle)
     rows = list(reversed(data["result"]["list"]))
-    closes = [float(row[4]) for row in rows]   # close
-    vols   = [float(row[6]) for row in rows]   # turnover in USDT
+    rows = rows[:-1]  # remove last incomplete candle
+    closes = [float(row[4]) for row in rows]
+    vols   = [float(row[5]) for row in rows]  # use base volume not turnover
     return closes, vols
 
 

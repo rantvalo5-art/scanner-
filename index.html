@@ -1454,10 +1454,11 @@ quickAdd=function(c){_origQuickAdd(c);saveState();};
 const _origRemoveCoin=removeCoin;
 removeCoin=function(coin){_origRemoveCoin(coin);saveState();};
 
-document.getElementById('tf').addEventListener('change',saveState);
+let stateLoaded=false;
+document.getElementById('tf').addEventListener('change',()=>{if(stateLoaded)saveState();});
 document.getElementById('ci').addEventListener('keydown',e=>{if(e.key==='Enter')addCoin();});
 loadMarket();
-loadState().then(had=>{if(!had)showToast('Agrega monedas para comenzar');});
+loadState().then(had=>{stateLoaded=true;if(!had)showToast('Agrega monedas para comenzar');});
 
 </script>
 </body>

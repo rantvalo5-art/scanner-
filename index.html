@@ -195,7 +195,7 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 <div class="wrap">
   <div class="nav">
     <div>
-      <div class="ttl">Crypto Signal Scanner Pro eunito</div>
+      <div class="ttl">Crypto Signal Scanner Pro aaaaaaaaaaaaaaaaaaaa</div>
       <div class="sub">RSI · EMA · MACD · Bollinger · Volumen + Backtesting</div>
     </div>
     <div class="nav-left">
@@ -227,7 +227,15 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
       <div class="rdot" id="rdot"></div>
       <div class="sep"></div>
       <button onclick="refreshAll()">↻ Actualizar</button>
-      <button onclick="sortCards()">⇅ Ordenar</button>
+      <select id="sort-by" onchange="sortCards()" style="padding:7px 10px;font-size:13px;border:1px solid #222;border-radius:8px;background:#111;color:#ccc;outline:none;cursor:pointer">
+        <option value="score-desc">⇅ Señal ↓</option>
+        <option value="score-asc">⇅ Señal ↑</option>
+        <option value="rsi-asc">RSI bajo → alto</option>
+        <option value="rsi-desc">RSI alto → bajo</option>
+        <option value="spike-desc">Spike volumen ↓</option>
+        <option value="chg-desc">Cambio 24h ↓</option>
+        <option value="chg-asc">Cambio 24h ↑</option>
+      </select>
     </div>
     <div class="chips">
       <span style="font-size:11px;color:#444;align-self:center;margin-right:2px">Populares:</span>
@@ -407,6 +415,28 @@ function calcVol(vols,closes){
   const lv=vols[vols.length-1];
   const up=closes[closes.length-1]>=closes[closes.length-2];
   return{ratio:lv/avg,up};
+}
+function calcOBV(vols,closes){
+  if(vols.length<10)return null;
+  let obv=0;const obvArr=[0];
+  for(let i=1;i<closes.length;i++){
+    if(closes[i]>closes[i-1])obv+=vols[i];
+    else if(closes[i]<closes[i-1])obv-=vols[i];
+    obvArr.push(obv);
+  }
+  const last=obvArr[obvArr.length-1];
+  const prev10=obvArr[Math.max(0,obvArr.length-11)];
+  const trend=last>prev10?'up':last<prev10?'down':'flat';
+  return{trend,values:obvArr.slice(-50)};
+}
+function calcVolSpike(vols,closes){
+  if(vols.length<20)return null;
+  const avg=vols.slice(-20).reduce((a,b)=>a+b,0)/20;
+  const maxSpike=Math.max(...vols.slice(-30))/avg;
+  const lv=vols[vols.length-1];
+  const vroc=vols.length>=11?((lv-vols[vols.length-11])/vols[vols.length-11]*100):0;
+  const up=closes[closes.length-1]>=closes[closes.length-2];
+  return{ratio:lv/avg,maxSpike7:maxSpike,vroc,up};
 }
 function analyze(rsi,macd,em,bb,vol){
   let score=0,sigs=[];
@@ -597,6 +627,8 @@ async function loadCoin(coin){
     const tf=document.getElementById('tf').value;
     const{closes,vols,rows}=await fetchTF(coin,tf,100);
     const rsi=calcRSI(closes),macd=calcMACD(closes),em=calcEMA(closes),bb=calcBB(closes),vol=calcVol(vols,closes);
+    const obv=calcOBV(vols,closes);
+    const spike=calcVolSpike(vols,closes);
     const{score,sigs}=analyze(rsi,macd,em,bb,vol);
     const chg24=((closes[closes.length-1]-parseFloat(rows[0][1]))/parseFloat(rows[0][1]))*100;
     const[r1h,r4h,r1d]=await Promise.all([
@@ -604,7 +636,7 @@ async function loadCoin(coin){
       fetchTF(coin,'4h',100).then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
       fetchTF(coin,'1d',100).then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
     ]);
-    cdata[coin]={symbol:coin,price:closes[closes.length-1],chg24,score,sigs,sparkPrices:closes.slice(-50),sparkVols:vols.slice(-50),sparkRSI:closes.slice(-50).map((_,i,arr)=>i<14?null:calcRSI(arr.slice(0,i+1))),tf1h:r1h,tf4h:r4h,tf1d:r1d};
+    cdata[coin]={symbol:coin,price:closes[closes.length-1],chg24,score,sigs,rsiVal:rsi,obv,spike,sparkPrices:closes.slice(-50),sparkVols:vols.slice(-50),sparkRSI:closes.slice(-50).map((_,i,arr)=>i<14?null:calcRSI(arr.slice(0,i+1))),sparkOBV:calcOBV(vols,closes)?calcOBV(vols,closes).values:null,tf1h:r1h,tf4h:r4h,tf1d:r1d};
     if(!history_[coin])history_[coin]=[];
     history_[coin].unshift({time:new Date().toLocaleTimeString('es-PY'),score});
     if(history_[coin].length>10)history_[coin].pop();
@@ -645,6 +677,38 @@ function renderCard(coin,loading,err){
     const inds=d.sigs.map(x=>`<div class="ind"><div class="il">${x.l}</div><div class="iv">${x.v}</div><div class="is ${indCls(x.t)}">${x.s}</div></div>`).join('');
     function tfB(s){return s===null?'tn':s>=2?'tb':s<=-2?'tr':'tn';}
     function tfL(s){return s===null?'—':(s>0?'+':'')+s;}
+
+    const obvTrend=d.obv?d.obv.trend:'flat';
+    const obvCls=obvTrend==='up'?'ib':obvTrend==='down'?'ir':'in_';
+    const obvIcon=obvTrend==='up'?'↑':obvTrend==='down'?'↓':'→';
+
+    const spk=d.spike;
+    const spikeRatio=spk?spk.ratio:0;
+    const spikeCls=spikeRatio>=3?'ir':spikeRatio>=1.5?'in_':'';
+    const spikeIcon=spikeRatio>=5?'🔥':spikeRatio>=3?'⚡':spikeRatio>=1.5?'↑':'';
+    const vroc=spk?spk.vroc:0;
+    const maxSpike=spk?spk.maxSpike7:0;
+
+    const rsiVal=d.rsiVal!=null?d.rsiVal.toFixed(1):'—';
+    const rsiCls=d.rsiVal<30?'ib':d.rsiVal>70?'ir':'in_';
+
+    const volRow=`<div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">
+      <div class="ind" style="flex:1;min-width:0">
+        <div class="il">OBV tendencia</div>
+        <div class="iv ${obvCls}">${obvIcon} ${obvTrend==='up'?'acumulando':obvTrend==='down'?'distribuyendo':'lateral'}</div>
+      </div>
+      <div class="ind" style="flex:1;min-width:0">
+        <div class="il">Vol spike (30v)</div>
+        <div class="iv ${spikeCls}">${spikeIcon} máx ${maxSpike.toFixed(1)}x</div>
+        <div class="is ${spikeCls}">ahora ${spikeRatio.toFixed(1)}x · VROC ${vroc>=0?'+':''}${vroc.toFixed(0)}%</div>
+      </div>
+      <div class="ind" style="flex:1;min-width:0">
+        <div class="il">RSI actual</div>
+        <div class="iv ${rsiCls}">${rsiVal}</div>
+        <div class="is ${rsiCls}">${d.rsiVal<30?'oversold':d.rsiVal>70?'overbought':'neutral'}</div>
+      </div>
+    </div>`;
+
     const alertHTML=alerts[coin]
       ?`<div class="alert-row"><div class="alert-active">Alerta: $${fmtPrice(alerts[coin].target)}</div><span class="alert-clr" onclick="clearAlert('${coin}')">× quitar</span></div>`
       :`<div class="alert-row"><input class="alert-inp" id="ai-${coin}" placeholder="Alerta precio..." type="number" step="any"/><button class="alert-btn" onclick="setAlert('${coin}')">+ Alerta</button></div>`;
@@ -657,6 +721,7 @@ function renderCard(coin,loading,err){
       <div class="minichart"><canvas id="spark-${coin}"></canvas></div>
       <div class="tfrow"><div class="tfbadge ${tfB(d.tf1h)}">1H: ${tfL(d.tf1h)}</div><div class="tfbadge ${tfB(d.tf4h)}">4H: ${tfL(d.tf4h)}</div><div class="tfbadge ${tfB(d.tf1d)}">1D: ${tfL(d.tf1d)}</div></div>
       <div class="inds">${inds}</div>
+      ${volRow}
       <div class="bar"><span class="barlbl">Señal:</span><div class="meter"><div class="mfill ${meterCls(d.score)}" style="width:${pct}%"></div></div><span class="bartxt ${sl.cls}">${sl.txt}</span></div>
       ${alertHTML}${histHTML}`;
   }
@@ -677,11 +742,23 @@ function applyFilter(){
   });
 }
 function sortCards(){
-  sortAsc=!sortAsc;
-  const sorted=[...coins].sort((a,b)=>{const sa=cdata[a]?cdata[a].score:-99;const sb=cdata[b]?cdata[b].score:-99;return sortAsc?sa-sb:sb-sa;});
+  const by=document.getElementById('sort-by').value;
+  const sorted=[...coins].sort((a,b)=>{
+    const da=cdata[a],db=cdata[b];
+    if(!da)return 1;if(!db)return -1;
+    if(by==='score-desc')return(db.score||0)-(da.score||0);
+    if(by==='score-asc')return(da.score||0)-(db.score||0);
+    if(by==='rsi-asc')return(da.rsiVal||50)-(db.rsiVal||50);
+    if(by==='rsi-desc')return(db.rsiVal||50)-(da.rsiVal||50);
+    if(by==='spike-desc')return(db.spike?db.spike.ratio:0)-(da.spike?da.spike.ratio:0);
+    if(by==='chg-desc')return(db.chg24||0)-(da.chg24||0);
+    if(by==='chg-asc')return(da.chg24||0)-(db.chg24||0);
+    return 0;
+  });
   const grid=document.getElementById('grid');
   sorted.forEach(c=>{const el=document.getElementById('c-'+c);if(el)grid.appendChild(el);});
-  showToast('Ordenado '+(sortAsc?'↑':'↓'));
+  const labels={'score-desc':'Señal ↓','score-asc':'Señal ↑','rsi-asc':'RSI bajo→alto','rsi-desc':'RSI alto→bajo','spike-desc':'Spike volumen','chg-desc':'Cambio 24h ↓','chg-asc':'Cambio 24h ↑'};
+  showToast('Ordenado por '+labels[by]);
 }
 function toggleHist(coin){const p=document.getElementById('hist-'+coin);if(p)p.style.display=p.style.display==='none'?'block':'none';}
 function toggleAutoRefresh(){

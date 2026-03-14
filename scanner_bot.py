@@ -170,11 +170,13 @@ def fetch_klines(symbol, interval="4h", limit=100):
     data = r.json()
     if data.get("retCode") != 0:
         raise Exception(f"Bybit error: {data.get('retMsg')}")
-    # Bybit: newest first → reverse → skip last (incomplete current candle)
     rows = list(reversed(data["result"]["list"]))
-    rows = rows[:-1]  # remove last incomplete candle
+    rows = rows[:-1]
+    # Debug: print last 3 rows to see all fields
+    print(f"    DEBUG Bybit fields (last row): {rows[-1]}")
+    print(f"    DEBUG Bybit fields (prev row): {rows[-2]}")
     closes = [float(row[4]) for row in rows]
-    vols   = [float(row[5]) for row in rows]  # use base volume not turnover
+    vols   = [float(row[5]) for row in rows]
     return closes, vols
 
 

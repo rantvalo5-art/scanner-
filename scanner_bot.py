@@ -140,27 +140,14 @@ def fetch_klines(symbol, interval="4h", limit=100):
     # 1. Try Binance global
     try:
         url = f"{BINANCE_BASE}/klines"
-        params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit}
+        params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit + 1}
         r = requests.get(url, params=params, timeout=10)
         if r.status_code == 200:
-            rows = r.json()
-            # Skip last candle (incomplete/current)
-            rows = rows[:-1]
+            rows = r.json()[:-1]  # skip incomplete last candle
             return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
     except: pass
 
-    # 2. Try Binance US
-    try:
-        url = f"https://api.binance.us/api/v3/klines"
-        params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit}
-        r = requests.get(url, params=params, timeout=10)
-        if r.status_code == 200:
-            rows = r.json()
-            rows = rows[:-1]
-            return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
-    except: pass
-
-    # 3. Fallback: Bybit
+    # 2. Bybit (skip Binance US — returns wrong volume format)
     interval_map = {"1h": "60", "4h": "240", "1d": "D"}
     bybit_interval = interval_map.get(interval, "240")
     url = "https://api.bybit.com/v5/market/kline"
@@ -170,13 +157,11 @@ def fetch_klines(symbol, interval="4h", limit=100):
     data = r.json()
     if data.get("retCode") != 0:
         raise Exception(f"Bybit error: {data.get('retMsg')}")
-    rows = list(reversed(data["result"]["list"]))
-    rows = rows[:-1]
-    # Debug: print last 3 rows to see all fields
-    print(f"    DEBUG Bybit fields (last row): {rows[-1]}")
-    print(f"    DEBUG Bybit fields (prev row): {rows[-2]}")
+    # Bybit format: [timestamp, open, high, low, close, volume, turnover]
+    # newest first -> reverse -> skip last incomplete candle
+    rows = list(reversed(data["result"]["list"]))[:-1]
     closes = [float(row[4]) for row in rows]
-    vols   = [float(row[5]) for row in rows]
+    vols   = [float(row[6]) for row in rows]  # turnover in USDT
     return closes, vols
 
 
@@ -274,8 +259,6 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
         print(f"  ❌ Fetch error for {coin}: {e}")
         return {}
 
-    print(f"    DEBUG closes[-3:]: {closes[-3:]}")
-    print(f"    DEBUG vols[-3:]: {vols[-3:]}")
     rsi   = calc_rsi(closes)
     macd  = calc_macd(closes)
     em    = calc_ema_cross(closes)

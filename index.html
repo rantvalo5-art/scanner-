@@ -454,14 +454,14 @@ async function loadCoin(coin){
   renderCard(coin,true,false);
   try{
     const tf=document.getElementById('tf').value;
-    const{closes,vols,rows}=await fetchTF(coin,tf);
+    const{closes,vols,rows}=await fetchTF(coin,tf,100);
     const rsi=calcRSI(closes),macd=calcMACD(closes),em=calcEMA(closes),bb=calcBB(closes),vol=calcVol(vols,closes);
     const{score,sigs}=analyze(rsi,macd,em,bb,vol);
     const chg24=((closes[closes.length-1]-parseFloat(rows[0][1]))/parseFloat(rows[0][1]))*100;
     const[r1h,r4h,r1d]=await Promise.all([
-      fetchTF(coin,'1h').then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
-      fetchTF(coin,'4h').then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
-      fetchTF(coin,'1d').then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
+      fetchTF(coin,'1h',100).then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
+      fetchTF(coin,'4h',100).then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
+      fetchTF(coin,'1d',100).then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
     ]);
     cdata[coin]={symbol:coin,price:closes[closes.length-1],chg24,score,sigs,sparkPrices:closes.slice(-30),tf1h:r1h,tf4h:r4h,tf1d:r1d};
     if(!history_[coin])history_[coin]=[];
@@ -920,7 +920,7 @@ function renderAutoResults(results){
         <div class="insight-chip ${winners.length>0?'good':'bad'}">${winners.length} combinaciones rentables de ${results.length}</div>
         ${best?`<div class="insight-chip good">Mejor: ${best.coin} ${best.tf.toUpperCase()} ${best.strategy} → ${best.totalReturn>=0?'+':''}${best.totalReturn.toFixed(1)}%</div>`:''}
         ${winners.length===0?`<div class="insight-chip bad">Ninguna estrategia fue rentable en este período bajista</div>`:''}
-        <div class="insight-chip warn">Período: últimas 1000 velas por timeframe</div>
+        <div class="insight-chip warn">Período: 5000 velas (~2 años) por timeframe</div>
       </div>
     </div>
     <div class="trades-wrap">

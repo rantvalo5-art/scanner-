@@ -177,6 +177,20 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 .auto-chip{display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid #222;border-radius:6px;background:#0d0d0d;color:#888;font-size:12px;cursor:pointer;transition:all 0.15s}
 .auto-chip:hover{background:#1a1a1a;color:#ccc}
 .auto-chip input{accent-color:#639922;cursor:pointer}
+.al-row{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #1a1a1a}
+.al-row:last-child{border-bottom:none}
+.al-toggle{min-width:44px;height:24px;border-radius:12px;background:#1a1a1a;border:1px solid #333;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#444;cursor:pointer;transition:all 0.2s;user-select:none}
+.al-toggle.on{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
+.al-info{flex:1}
+.al-name{font-size:13px;font-weight:500;color:#ccc;margin-bottom:4px}
+.al-desc{font-size:12px;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.al-inp{width:46px;padding:2px 6px;font-size:12px;border:1px solid #333;border-radius:5px;background:#0d0d0d;color:#ccc;outline:none;text-align:center}
+.al-inp:focus{border-color:#555}
+.coin-al-row{display:flex;gap:8px;align-items:center;padding:8px 10px;background:#0d0d0d;border-radius:8px;margin-bottom:6px;flex-wrap:wrap}
+.coin-al-name{font-size:12px;font-weight:600;color:#fff;min-width:50px}
+.coin-al-chip{padding:3px 8px;border-radius:5px;font-size:11px;border:1px solid #222;background:#111;color:#555;cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.coin-al-chip:hover{color:#ccc;border-color:#444}
+.coin-al-chip.on{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 .auto-table{width:100%;border-collapse:collapse;font-size:12px}
 .auto-table th{text-align:left;padding:8px 10px;color:#444;font-weight:500;border-bottom:1px solid #1a1a1a;font-size:11px}
 .auto-table td{padding:8px 10px;border-bottom:1px solid #111;color:#aaa}
@@ -195,12 +209,13 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 <div class="wrap">
   <div class="nav">
     <div>
-      <div class="ttl">Crypto Signal Scanner Pro sage</div>
+      <div class="ttl">Crypto Signal Scanner Pro ueno</div>
       <div class="sub">RSI · EMA · MACD · Bollinger · Volumen + Backtesting</div>
     </div>
     <div class="nav-left">
       <div class="ntab active" onclick="showPage('scanner')">Scanner</div>
       <div class="ntab" onclick="showPage('backtest')">Backtesting</div>
+      <div class="ntab" onclick="showPage('alerts')" id="nav-alerts">🔔 Alertas</div>
     </div>
   </div>
 
@@ -372,6 +387,87 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
       </div>
 
       <div id="bt-results"></div>
+    </div>
+  </div>
+
+  <!-- =================== ALERTS PAGE =================== -->
+  <div class="page" id="page-alerts">
+    <div style="max-width:700px">
+
+      <!-- TEST + STATUS -->
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap">
+        <button onclick="testTelegram()" style="padding:8px 16px;font-size:13px;border:1px solid #4a7c2f;border-radius:8px;background:#1e3a0f;color:#7bc142;cursor:pointer;font-weight:600">📱 Probar Telegram</button>
+        <div style="font-size:12px;color:#444">Las alertas se envían a Telegram cuando el scanner está abierto y auto-refresh activado</div>
+      </div>
+
+      <!-- GLOBAL TRIGGERS -->
+      <div class="bt-controls" style="flex-direction:column;gap:14px">
+        <div style="font-size:13px;font-weight:600;color:#888">Triggers globales — aplican a TODAS las monedas</div>
+
+        <div class="al-row" id="alrow-mr">
+          <div class="al-toggle" onclick="toggleGlobal('mr')" id="altog-mr">OFF</div>
+          <div class="al-info">
+            <div class="al-name">🔥 Mean Reversion</div>
+            <div class="al-desc">RSI baja de <input class="al-inp" id="al-mr-rsi" value="35" type="number" min="10" max="50"> + OBV acumulando</div>
+          </div>
+        </div>
+
+        <div class="al-row" id="alrow-spike">
+          <div class="al-toggle" onclick="toggleGlobal('spike')" id="altog-spike">OFF</div>
+          <div class="al-info">
+            <div class="al-name">⚡ Volume Spike</div>
+            <div class="al-desc">Spike mayor a <input class="al-inp" id="al-spike-x" value="3" type="number" min="1.5" max="20" step="0.5">x el promedio + vela verde</div>
+          </div>
+        </div>
+
+        <div class="al-row" id="alrow-ob">
+          <div class="al-toggle" onclick="toggleGlobal('ob')" id="altog-ob">OFF</div>
+          <div class="al-info">
+            <div class="al-name">🚨 Overbought</div>
+            <div class="al-desc">RSI sube de <input class="al-inp" id="al-ob-rsi" value="70" type="number" min="60" max="90"> + OBV distribuyendo</div>
+          </div>
+        </div>
+
+        <div class="al-row" id="alrow-strong">
+          <div class="al-toggle" onclick="toggleGlobal('strong')" id="altog-strong">OFF</div>
+          <div class="al-info">
+            <div class="al-name">💎 Strong Buy</div>
+            <div class="al-desc">Puntaje llega a <input class="al-inp" id="al-strong-score" value="4" type="number" min="2" max="5"> o más</div>
+          </div>
+        </div>
+
+        <div class="al-row" id="alrow-sell">
+          <div class="al-toggle" onclick="toggleGlobal('sell')" id="altog-sell">OFF</div>
+          <div class="al-info">
+            <div class="al-name">📉 Strong Sell</div>
+            <div class="al-desc">Puntaje llega a <input class="al-inp" id="al-sell-score" value="-4" type="number" min="-5" max="-2"> o menos</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PER COIN TRIGGERS -->
+      <div class="bt-controls" style="flex-direction:column;gap:12px;margin-top:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:13px;font-weight:600;color:#888">Triggers por moneda individual</div>
+          <button onclick="renderCoinAlerts()" style="font-size:11px;padding:4px 10px;border:1px solid #333;border-radius:6px;background:#111;color:#666;cursor:pointer">↻ Actualizar lista</button>
+        </div>
+        <div id="coin-alerts-list">
+          <div style="font-size:12px;color:#444">Agrega monedas en el Scanner primero, luego vuelve aquí.</div>
+        </div>
+      </div>
+
+      <!-- COOLDOWN -->
+      <div class="bt-controls" style="margin-top:12px;align-items:center">
+        <div style="font-size:13px;color:#888">Cooldown entre alertas:</div>
+        <select id="al-cooldown" style="padding:6px 10px;font-size:13px;border:1px solid #222;border-radius:8px;background:#0d0d0d;color:#e0e0e0;outline:none">
+          <option value="300000">5 minutos</option>
+          <option value="900000">15 minutos</option>
+          <option value="1800000">30 minutos</option>
+          <option value="3600000">1 hora</option>
+        </select>
+        <div style="font-size:11px;color:#444">Tiempo mínimo entre el mismo tipo de alerta para la misma moneda</div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1177,7 +1273,9 @@ function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  document.querySelectorAll('.ntab').forEach(t=>{if(t.textContent.toLowerCase().includes(id==='scanner'?'scan':'back'))t.classList.add('active');});
+  if(id==='scanner')document.querySelectorAll('.ntab').forEach(t=>{if(t.textContent.toLowerCase().includes('scan'))t.classList.add('active');});
+  else if(id==='backtest')document.querySelectorAll('.ntab').forEach(t=>{if(t.textContent.toLowerCase().includes('back'))t.classList.add('active');});
+  else if(id==='alerts'){document.getElementById('nav-alerts').classList.add('active');renderCoinAlerts();}
 }
 
 function showToast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
@@ -1187,6 +1285,54 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const TG_TOKEN='8521701026:AAH7tNR4hMf5iR-xS9UgHnQYlrUKnd4Anl8';
 const TG_CHAT='8576536483';
 const sentAlerts={};
+
+// Alert config: global triggers on/off
+const globalTriggers={mr:false,spike:false,ob:false,strong:false,sell:false};
+// Per-coin triggers: {DOGE:{mr:true,spike:false,...}, ...}
+const coinTriggers={};
+
+function toggleGlobal(type){
+  globalTriggers[type]=!globalTriggers[type];
+  const el=document.getElementById('altog-'+type);
+  const row=document.getElementById('alrow-'+type);
+  el.textContent=globalTriggers[type]?'ON':'OFF';
+  el.classList.toggle('on',globalTriggers[type]);
+}
+
+function toggleCoin(coin,type){
+  if(!coinTriggers[coin])coinTriggers[coin]={};
+  coinTriggers[coin][type]=!coinTriggers[coin][type];
+  const el=document.getElementById(`cal-${coin}-${type}`);
+  if(el)el.classList.toggle('on',coinTriggers[coin][type]);
+}
+
+function isEnabled(coin,type){
+  // global ON = applies to all coins
+  if(globalTriggers[type])return true;
+  // per-coin ON
+  if(coinTriggers[coin]&&coinTriggers[coin][type])return true;
+  return false;
+}
+
+function renderCoinAlerts(){
+  const container=document.getElementById('coin-alerts-list');
+  if(!coins.length){container.innerHTML='<div style="font-size:12px;color:#444">Agrega monedas en el Scanner primero.</div>';return;}
+  const types=[
+    {k:'mr',label:'🔥 MR'},
+    {k:'spike',label:'⚡ Spike'},
+    {k:'ob',label:'🚨 OB'},
+    {k:'strong',label:'💎 Buy'},
+    {k:'sell',label:'📉 Sell'},
+  ];
+  container.innerHTML=coins.map(coin=>{
+    if(!coinTriggers[coin])coinTriggers[coin]={};
+    const chips=types.map(t=>{
+      const on=coinTriggers[coin][t.k]||false;
+      return`<div class="coin-al-chip${on?' on':''}" id="cal-${coin}-${t.k}" onclick="toggleCoin('${coin}','${t.k}')">${t.label}</div>`;
+    }).join('');
+    return`<div class="coin-al-row"><div class="coin-al-name">${coin}</div>${chips}</div>`;
+  }).join('');
+}
 
 async function sendTelegram(msg){
   try{
@@ -1198,11 +1344,13 @@ async function sendTelegram(msg){
   }catch(e){}
 }
 
+function getCooldown(){return parseInt(document.getElementById('al-cooldown')?document.getElementById('al-cooldown').value:300000);}
+
 function checkTriggers(coin,d){
   const now=Date.now();
-  const cooldown=5*60*1000;
+  const cooldown=getCooldown();
   const key=(type)=>`${coin}_${type}`;
-  const canSend=(type)=>!sentAlerts[key(type)]||(now-sentAlerts[key(type)])>cooldown;
+  const canSend=(type)=>isEnabled(coin,type)&&(!sentAlerts[key(type)]||(now-sentAlerts[key(type)])>cooldown);
   const mark=(type)=>{sentAlerts[key(type)]=now;};
 
   const rsi=d.rsiVal;
@@ -1210,81 +1358,37 @@ function checkTriggers(coin,d){
   const spike=d.spike?d.spike.ratio:0;
   const score=d.score;
   const px=fmtPrice(d.price);
+  const mrRSI=parseFloat(document.getElementById('al-mr-rsi')?document.getElementById('al-mr-rsi').value:35);
+  const spikeX=parseFloat(document.getElementById('al-spike-x')?document.getElementById('al-spike-x').value:3);
+  const obRSI=parseFloat(document.getElementById('al-ob-rsi')?document.getElementById('al-ob-rsi').value:70);
+  const strongScore=parseInt(document.getElementById('al-strong-score')?document.getElementById('al-strong-score').value:4);
+  const sellScore=parseInt(document.getElementById('al-sell-score')?document.getElementById('al-sell-score').value:-4);
 
-  // 🔥 Mean Reversion Signal — RSI < 35 + OBV acumulando
-  if(rsi!==null&&rsi<35&&obv==='up'&&canSend('mr')){
+  if(rsi!==null&&rsi<mrRSI&&obv==='up'&&canSend('mr')){
     mark('mr');
-    sendTelegram(
-      `🔥 <b>MEAN REVERSION SIGNAL</b>\n`+
-      `Moneda: <b>${coin}/USDT</b>\n`+
-      `Precio: $${px}\n`+
-      `RSI: ${rsi.toFixed(1)} (oversold ✅)\n`+
-      `OBV: acumulando ↑ ✅\n`+
-      `Puntaje: ${score>0?'+':''}${score}\n`+
-      `→ Posible rebote próximo`
-    );
-    showToast(`📱 Telegram: ${coin} Mean Reversion Signal!`,'warn');
+    sendTelegram(`🔥 <b>MEAN REVERSION</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (oversold ✅)\nOBV: acumulando ↑\nPuntaje: ${score>0?'+':''}${score}`);
+    showToast(`📱 ${coin} Mean Reversion!`,'warn');
   }
-
-  // ⚡ Volume Spike fuerte + vela verde
-  if(spike>=3&&d.spike&&d.spike.up&&canSend('spike')){
+  if(spike>=spikeX&&d.spike&&d.spike.up&&canSend('spike')){
     mark('spike');
-    sendTelegram(
-      `⚡ <b>VOLUME SPIKE ALERT</b>\n`+
-      `Moneda: <b>${coin}/USDT</b>\n`+
-      `Precio: $${px}\n`+
-      `Spike: ${spike.toFixed(1)}x el promedio 🔥\n`+
-      `VROC: ${d.spike.vroc>=0?'+':''}${d.spike.vroc.toFixed(0)}%\n`+
-      `Dirección: vela verde ✅\n`+
-      `→ Compra masiva detectada`
-    );
-    showToast(`📱 Telegram: ${coin} Volume Spike ${spike.toFixed(1)}x!`,'warn');
+    sendTelegram(`⚡ <b>VOLUME SPIKE</b>\n<b>${coin}/USDT</b> — $${px}\nSpike: ${spike.toFixed(1)}x promedio 🔥\nVROC: ${d.spike.vroc>=0?'+':''}${d.spike.vroc.toFixed(0)}%`);
+    showToast(`📱 ${coin} Spike ${spike.toFixed(1)}x!`,'warn');
   }
-
-  // 🚨 Overbought Warning — RSI > 70 + OBV distribuyendo
-  if(rsi!==null&&rsi>70&&obv==='down'&&canSend('ob')){
+  if(rsi!==null&&rsi>obRSI&&obv==='down'&&canSend('ob')){
     mark('ob');
-    sendTelegram(
-      `🚨 <b>OVERBOUGHT WARNING</b>\n`+
-      `Moneda: <b>${coin}/USDT</b>\n`+
-      `Precio: $${px}\n`+
-      `RSI: ${rsi.toFixed(1)} (overbought ⚠️)\n`+
-      `OBV: distribuyendo ↓ ⚠️\n`+
-      `→ Posible caída próxima — no compres`
-    );
-    showToast(`📱 Telegram: ${coin} Overbought Warning!`,'err');
+    sendTelegram(`🚨 <b>OVERBOUGHT</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (overbought)\nOBV: distribuyendo ↓`);
+    showToast(`📱 ${coin} Overbought!`,'err');
   }
-
-  // 💎 Strong Buy — puntaje +4 o +5
-  if(score>=4&&canSend('strong')){
+  if(score>=strongScore&&canSend('strong')){
     mark('strong');
-    sendTelegram(
-      `💎 <b>STRONG BUY SIGNAL</b>\n`+
-      `Moneda: <b>${coin}/USDT</b>\n`+
-      `Precio: $${px}\n`+
-      `Puntaje: <b>${score>0?'+':''}${score}/+5</b> ✅\n`+
-      `RSI: ${rsi!==null?rsi.toFixed(1):'—'}\n`+
-      `OBV: ${obv==='up'?'acumulando ✅':obv==='down'?'distribuyendo ⚠️':'lateral'}\n`+
-      `→ Todos los indicadores alineados`
-    );
-    showToast(`📱 Telegram: ${coin} Strong Buy +${score}!`,'warn');
+    sendTelegram(`💎 <b>STRONG BUY</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: <b>${score>0?'+':''}${score}/+5</b>\nRSI: ${rsi!==null?rsi.toFixed(1):'—'}`);
+    showToast(`📱 ${coin} Strong Buy +${score}!`,'warn');
   }
-
-  // 📉 Strong Sell — puntaje -4 o -5
-  if(score<=-4&&canSend('sell')){
+  if(score<=sellScore&&canSend('sell')){
     mark('sell');
-    sendTelegram(
-      `📉 <b>STRONG SELL SIGNAL</b>\n`+
-      `Moneda: <b>${coin}/USDT</b>\n`+
-      `Precio: $${px}\n`+
-      `Puntaje: <b>${score}/-5</b> ❌\n`+
-      `RSI: ${rsi!==null?rsi.toFixed(1):'—'}\n`+
-      `→ Todos los indicadores bajistas`
-    );
-    showToast(`📱 Telegram: ${coin} Strong Sell ${score}!`,'err');
+    sendTelegram(`📉 <b>STRONG SELL</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: <b>${score}/-5</b>`);
+    showToast(`📱 ${coin} Strong Sell ${score}!`,'err');
   }
-
-  // 💰 Price Alert manual
   checkAlert(coin,d.price);
 }
 const SUPA_HEADERS={'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};
@@ -1311,7 +1415,9 @@ async function saveState(){
 }
 
 async function loadState(){
+  // Always try cloud first — force cloud load
   try{
+    showToast('Conectando a la nube...');
     const r=await fetch(`${SUPA_URL}/rest/v1/scanner_state?id=eq.default&select=*`,{headers:SUPA_HEADERS});
     if(r.ok){
       const data=await r.json();
@@ -1320,28 +1426,38 @@ async function loadState(){
         if(s.timeframe)document.getElementById('tf').value=s.timeframe;
         if(s.alerts&&typeof s.alerts==='object'){Object.keys(s.alerts).forEach(k=>{alerts[k]=s.alerts[k];});}
         if(s.coins&&s.coins.length){
-          showToast('Monedas sincronizadas desde la nube ☁️');
+          showToast(`☁️ ${s.coins.length} monedas cargadas desde la nube`);
           s.coins.forEach(coin=>quickAdd(coin));
+          // sync localStorage with cloud data
+          localStorage.setItem('scanner_coins',JSON.stringify(s.coins));
+          localStorage.setItem('scanner_tf',s.timeframe||'1h');
+          return true;
+        } else {
+          showToast('Nube conectada — sin monedas guardadas');
+          return false;
+        }
+      }
+    } else {
+      throw new Error('Cloud response not ok: '+r.status);
+    }
+  }catch(e){
+    // Cloud failed — fall back to localStorage with warning
+    showToast('⚠️ Nube no disponible — usando caché local','warn');
+    try{
+      const savedTF=localStorage.getItem('scanner_tf');
+      if(savedTF)document.getElementById('tf').value=savedTF;
+      const savedAlerts=localStorage.getItem('scanner_alerts');
+      if(savedAlerts){const a=JSON.parse(savedAlerts);Object.keys(a).forEach(k=>{alerts[k]=a[k];});}
+      const savedCoins=localStorage.getItem('scanner_coins');
+      if(savedCoins){
+        const c=JSON.parse(savedCoins);
+        if(c&&c.length){
+          c.forEach(coin=>quickAdd(coin));
           return true;
         }
       }
-    }
-  }catch(e){}
-  try{
-    const savedTF=localStorage.getItem('scanner_tf');
-    if(savedTF)document.getElementById('tf').value=savedTF;
-    const savedAlerts=localStorage.getItem('scanner_alerts');
-    if(savedAlerts){const a=JSON.parse(savedAlerts);Object.keys(a).forEach(k=>{alerts[k]=a[k];});}
-    const savedCoins=localStorage.getItem('scanner_coins');
-    if(savedCoins){
-      const c=JSON.parse(savedCoins);
-      if(c&&c.length){
-        showToast('Cargando desde caché local...');
-        c.forEach(coin=>quickAdd(coin));
-        return true;
-      }
-    }
-  }catch(e){}
+    }catch(e2){}
+  }
   return false;
 }
 

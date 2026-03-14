@@ -177,20 +177,29 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
 .auto-chip{display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid #2e3340;border-radius:6px;background:#1e2128;color:#7a8290;font-size:12px;cursor:pointer;transition:all 0.15s}
 .auto-chip:hover{background:#282c35;color:#c8cdd5}
 .auto-chip input{accent-color:#639922;cursor:pointer}
-.tbl-wrap{width:100%;overflow-x:auto}
-.tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{text-align:left;padding:8px 10px;color:#4a5260;font-weight:500;border-bottom:1px solid #2a2e38;font-size:11px;white-space:nowrap;cursor:pointer;user-select:none}
-.tbl th:hover{color:#7a8290}
-.tbl td{padding:9px 10px;border-bottom:1px solid #252930;color:#9aa0ab;white-space:nowrap}
-.tbl tr:hover td{background:#21252d}
-.tbl tr.row-buy td:first-child{border-left:2px solid #2d5a18}
-.tbl tr.row-sell td:first-child{border-left:2px solid #5a1818}
-.tbl tr.row-neutral td:first-child{border-left:2px solid #333}
-.tbl .cn{font-weight:600;color:#fff}
-.tbl .up{color:#7bc142}.tbl .down{color:#e24b4a}.tbl .neu{color:#ef9f27}
-.tbl .score-b{background:#1a3d12;color:#7bc142;padding:2px 7px;border-radius:10px;font-weight:700;font-size:11px}
-.tbl .score-s{background:#3d1212;color:#e24b4a;padding:2px 7px;border-radius:10px;font-weight:700;font-size:11px}
-.tbl .score-n{background:#1e1a00;color:#ef9f27;padding:2px 7px;border-radius:10px;font-weight:700;font-size:11px}
+.tbl-wrap{width:100%;overflow-x:auto;border-radius:10px;border:1px solid #2e3340;overflow:hidden}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl thead{background:#1e2128}
+.tbl th{text-align:left;padding:11px 14px;color:#636b78;font-weight:500;font-size:11px;letter-spacing:0.5px;text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none;border-bottom:1px solid #2e3340}
+.tbl th:hover{color:#9aa0ab}
+.tbl tbody tr{background:#21252d;transition:background 0.1s}
+.tbl tbody tr:nth-child(even){background:#252930}
+.tbl tbody tr:hover td{background:#2e3340}
+.tbl td{padding:12px 14px;border-bottom:1px solid #2a2e38;color:#c8cdd5;white-space:nowrap;vertical-align:middle}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tbl tr.row-buy{border-left:3px solid #4a8c2f}
+.tbl tr.row-sell{border-left:3px solid #8c3232}
+.tbl tr.row-neutral{border-left:3px solid #3d4452}
+.tbl .cn{font-weight:700;color:#fff;font-size:14px;letter-spacing:0.3px}
+.tbl .coin-sub{font-size:10px;color:#4a5260;margin-top:1px}
+.tbl .up{color:#7bc142;font-weight:600}.tbl .down{color:#e24b4a;font-weight:600}.tbl .neu{color:#ef9f27;font-weight:500}
+.tbl .score-b{background:#1a3d12;color:#7bc142;padding:3px 9px;border-radius:12px;font-weight:700;font-size:12px;display:inline-block}
+.tbl .score-s{background:#3d1212;color:#e24b4a;padding:3px 9px;border-radius:12px;font-weight:700;font-size:12px;display:inline-block}
+.tbl .score-n{background:#2e2600;color:#ef9f27;padding:3px 9px;border-radius:12px;font-weight:700;font-size:12px;display:inline-block}
+.tbl .price-val{color:#fff;font-weight:600;font-size:13px}
+.tbl .tf-cell{font-size:11px;line-height:1.8}
+.tbl .rm-btn{padding:4px 10px;font-size:11px;border:1px solid #3d4452;border-radius:6px;background:transparent;color:#636b78;cursor:pointer;transition:all 0.15s}
+.tbl .rm-btn:hover{background:#3d4452;color:#c8cdd5}
 .ind-pill{display:inline-block;padding:1px 5px;border-radius:4px;font-size:10px;margin:1px}
 .ind-b{background:#1a3d12;color:#7bc142}.ind-r{background:#3d1212;color:#e24b4a}.ind-n{background:#1e1a00;color:#ef9f27}
 .al-row{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #2a2e38}
@@ -297,16 +306,16 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
       <div class="tbl-wrap">
         <table class="tbl" id="tbl">
           <thead><tr>
-            <th onclick="sortTable('symbol')">MONEDA</th>
-            <th onclick="sortTable('price')">PRECIO</th>
-            <th onclick="sortTable('chg24')">24H %</th>
-            <th onclick="sortTable('score')">PUNTAJE</th>
-            <th onclick="sortTable('rsi')">RSI</th>
-            <th>TF</th>
+            <th onclick="sortTable('symbol')">MONEDA ⇅</th>
+            <th onclick="sortTable('price')">P. ACTUAL ⇅</th>
+            <th onclick="sortTable('chg24')">24H % ⇅</th>
+            <th onclick="sortTable('score')">PUNTAJE ⇅</th>
+            <th onclick="sortTable('rsi')">RSI ⇅</th>
+            <th>TIMEFRAMES</th>
             <th>INDICADORES</th>
-            <th onclick="sortTable('obv')">OBV</th>
-            <th onclick="sortTable('spike')">SPIKE</th>
-            <th onclick="sortTable('macd')">MACD</th>
+            <th onclick="sortTable('obv')">OBV ⇅</th>
+            <th onclick="sortTable('spike')">SPIKE ⇅</th>
+            <th onclick="sortTable('macd')">MACD ⇅</th>
             <th>ACCIÓN</th>
           </tr></thead>
           <tbody id="tbl-body"></tbody>
@@ -897,23 +906,24 @@ function renderTable(){
     function tfL(s){return s===null?'—':(s>0?'+':'')+s;}
     const inds=d.sigs?d.sigs.map(x=>`<span class="ind-pill ind-${x.t}">${x.l}: ${x.v}</span>`).join(''):'';
     return`<tr class="row-${sc}">
-      <td><span class="cn">${coin}</span><br><span style="font-size:10px;color:#4a5260">USDT</span></td>
-      <td style="color:#fff;font-weight:500">$${fmtPrice(d.price)}</td>
+      <td>
+        <div class="cn">${coin}</div>
+        <div class="coin-sub">${coin}/USDT</div>
+      </td>
+      <td class="price-val">$${fmtPrice(d.price)}</td>
       <td class="${chgCls}">${chgStr}</td>
       <td><span class="${scoreCls}">${d.score>0?'+':''}${d.score}</span></td>
-      <td class="${rsiCls}">${rsiVal}</td>
-      <td style="font-size:11px">
-        <span class="${tfB(d.tf1h)}">1H:${tfL(d.tf1h)}</span>
-        <span style="color:#3d4452"> · </span>
-        <span class="${tfB(d.tf4h)}">4H:${tfL(d.tf4h)}</span>
-        <span style="color:#3d4452"> · </span>
-        <span class="${tfB(d.tf1d)}">1D:${tfL(d.tf1d)}</span>
+      <td class="${rsiCls}" style="font-size:13px">${rsiVal}</td>
+      <td class="tf-cell">
+        <div><span style="color:#4a5260;font-size:10px">1H </span><span class="${tfB(d.tf1h)}">${tfL(d.tf1h)}</span></div>
+        <div><span style="color:#4a5260;font-size:10px">4H </span><span class="${tfB(d.tf4h)}">${tfL(d.tf4h)}</span></div>
+        <div><span style="color:#4a5260;font-size:10px">1D </span><span class="${tfB(d.tf1d)}">${tfL(d.tf1d)}</span></div>
       </td>
-      <td style="max-width:180px;white-space:normal">${inds}</td>
+      <td style="max-width:200px;white-space:normal;line-height:1.8">${inds}</td>
       <td class="${obvCls}">${obvIcon}</td>
-      <td class="${spikeCls}">${spike.toFixed(1)}x</td>
+      <td class="${spikeCls}">${spike.toFixed(1)}x<span style="font-size:10px;color:#4a5260;margin-left:3px">avg</span></td>
       <td class="${macdCls}">${macdTxt}</td>
-      <td><button onclick="removeCoin('${coin}')" style="padding:3px 8px;font-size:11px;border:1px solid #333;border-radius:5px;background:#21252d;color:#555e6b;cursor:pointer">✕</button></td>
+      <td><button class="rm-btn" onclick="removeCoin('${coin}')">✕ quitar</button></td>
     </tr>`;
   }).join('');
 }

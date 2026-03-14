@@ -195,7 +195,7 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 <div class="wrap">
   <div class="nav">
     <div>
-      <div class="ttl">Crypto Signal Scanner Pro itau</div>
+      <div class="ttl">Crypto Signal Scanner Pro eunito</div>
       <div class="sub">RSI · EMA · MACD · Bollinger · Volumen + Backtesting</div>
     </div>
     <div class="nav-left">
@@ -1091,27 +1091,58 @@ function showPage(id){
 
 function showToast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
 
-function saveState(){
+const SUPA_URL='https://ecgdswroygkfckkaguxp.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjZ2Rzd3JveWdrZmNra2FndXhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTUyNzEsImV4cCI6MjA4OTA5MTI3MX0.N_qJsJWTJaqRHpugzlnRTpoZI84mUoctt3RKmUshIrU';
+const SUPA_HEADERS={'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};
+
+async function saveState(){
   try{
-    localStorage.setItem('scanner_coins',JSON.stringify(coins));
     const alertsToSave={};
     Object.keys(alerts).forEach(k=>{alertsToSave[k]=alerts[k];});
+    const tf=document.getElementById('tf').value;
+    await fetch(`${SUPA_URL}/rest/v1/scanner_state?id=eq.default`,{
+      method:'PATCH',
+      headers:SUPA_HEADERS,
+      body:JSON.stringify({coins,alerts:alertsToSave,timeframe:tf,updated_at:new Date().toISOString()})
+    });
+    localStorage.setItem('scanner_coins',JSON.stringify(coins));
     localStorage.setItem('scanner_alerts',JSON.stringify(alertsToSave));
-    localStorage.setItem('scanner_tf',document.getElementById('tf').value);
-  }catch(e){}
+    localStorage.setItem('scanner_tf',tf);
+  }catch(e){
+    try{
+      localStorage.setItem('scanner_coins',JSON.stringify(coins));
+      localStorage.setItem('scanner_tf',document.getElementById('tf').value);
+    }catch(e2){}
+  }
 }
 
-function loadState(){
+async function loadState(){
+  try{
+    const r=await fetch(`${SUPA_URL}/rest/v1/scanner_state?id=eq.default&select=*`,{headers:SUPA_HEADERS});
+    if(r.ok){
+      const data=await r.json();
+      if(data&&data[0]){
+        const s=data[0];
+        if(s.timeframe)document.getElementById('tf').value=s.timeframe;
+        if(s.alerts&&typeof s.alerts==='object'){Object.keys(s.alerts).forEach(k=>{alerts[k]=s.alerts[k];});}
+        if(s.coins&&s.coins.length){
+          showToast('Monedas sincronizadas desde la nube ☁️');
+          s.coins.forEach(coin=>quickAdd(coin));
+          return true;
+        }
+      }
+    }
+  }catch(e){}
   try{
     const savedTF=localStorage.getItem('scanner_tf');
-    if(savedTF){document.getElementById('tf').value=savedTF;}
+    if(savedTF)document.getElementById('tf').value=savedTF;
     const savedAlerts=localStorage.getItem('scanner_alerts');
     if(savedAlerts){const a=JSON.parse(savedAlerts);Object.keys(a).forEach(k=>{alerts[k]=a[k];});}
     const savedCoins=localStorage.getItem('scanner_coins');
     if(savedCoins){
       const c=JSON.parse(savedCoins);
       if(c&&c.length){
-        showToast('Cargando monedas guardadas...');
+        showToast('Cargando desde caché local...');
         c.forEach(coin=>quickAdd(coin));
         return true;
       }
@@ -1129,8 +1160,7 @@ removeCoin=function(coin){_origRemoveCoin(coin);saveState();};
 document.getElementById('tf').addEventListener('change',saveState);
 document.getElementById('ci').addEventListener('keydown',e=>{if(e.key==='Enter')addCoin();});
 loadMarket();
-const hadSaved=loadState();
-if(!hadSaved){showToast('Agrega monedas para comenzar');}
+loadState().then(had=>{if(!had)showToast('Agrega monedas para comenzar');});
 
 </script>
 </body>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Crypto Signal Scanner Pro 2</title>
+<title>Crypto Signal Scanner Pro</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#e0e0e0;min-height:100vh;padding:1.25rem}
@@ -195,7 +195,7 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 <div class="wrap">
   <div class="nav">
     <div>
-      <div class="ttl">Crypto Signal Scanner Pro</div>
+      <div class="ttl">Crypto Signal Scanner Pro 2</div>
       <div class="sub">RSI · EMA · MACD · Bollinger · Volumen + Backtesting</div>
     </div>
     <div class="nav-left">
@@ -847,8 +847,8 @@ async function runAutoTest(){
       // Mean reversion
       document.getElementById('auto-progress-txt').textContent=`${coin} ${tf.toUpperCase()} — Mean Reversion...`;
       document.getElementById('auto-progress-bar').style.width=(done/total*100)+'%';
-      const mrTrades=calcMeanReversionTrades(closes,vols,rows,28,48,0.07,0.04);
-      results.push({coin,tf,strategy:'Mean Rev (RSI<28)',...mrTrades});
+      const mrTrades=calcMeanReversionTrades(closes,vols,rows,35,55,0.07,0.04);
+      results.push({coin,tf,strategy:'Mean Rev (RSI<35)',...mrTrades});
       done++;
     }catch(e){done+=2;}
   }

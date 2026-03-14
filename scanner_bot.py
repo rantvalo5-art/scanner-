@@ -143,25 +143,26 @@ def fetch_klines(symbol, interval="4h", limit=100):
         params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit + 1}
         r = requests.get(url, params=params, timeout=10)
         if r.status_code == 200:
-            rows = r.json()[:-1]  # skip incomplete last candle
+            rows = r.json()[:-1]
             return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
     except: pass
 
-    # 2. Bybit (skip Binance US — returns wrong volume format)
-    interval_map = {"1h": "60", "4h": "240", "1d": "D"}
-    bybit_interval = interval_map.get(interval, "240")
-    url = "https://api.bybit.com/v5/market/kline"
-    params = {"symbol": f"{symbol}USDT", "interval": bybit_interval, "limit": limit + 1}
-    r = requests.get(url, params=params, timeout=10)
+    # 2. OKX — works from GitHub Actions, good volume data
+    interval_map = {"1h": "1H", "4h": "4H", "1d": "1D"}
+    okx_bar = interval_map.get(interval, "4H")
+    url = "https://www.okx.com/api/v5/market/candles"
+    params = {"instId": f"{symbol}-USDT", "bar": okx_bar, "limit": str(limit + 1)}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = requests.get(url, params=params, headers=headers, timeout=10)
     r.raise_for_status()
     data = r.json()
-    if data.get("retCode") != 0:
-        raise Exception(f"Bybit error: {data.get('retMsg')}")
-    # Bybit format: [timestamp, open, high, low, close, volume, turnover]
-    # newest first -> reverse -> skip last incomplete candle
-    rows = list(reversed(data["result"]["list"]))[:-1]
+    if data.get("code") != "0":
+        raise Exception(f"OKX error: {data.get('msg')}")
+    # OKX format: [ts, open, high, low, close, vol, volCcy, volCcyQuote, confirm]
+    # Returns newest first — reverse, skip last incomplete
+    rows = list(reversed(data["data"]))[:-1]
     closes = [float(row[4]) for row in rows]
-    vols   = [float(row[6]) for row in rows]  # turnover in USDT
+    vols   = [float(row[7]) for row in rows]  # volCcyQuote = USDT volume
     return closes, vols
 
 

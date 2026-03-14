@@ -103,6 +103,7 @@ def calc_spike(vols, closes):
         return None
     avg = sum(vols[-20:]) / 20
     lv = vols[-1]
+    print(f"    DEBUG vol: last={lv:.2f} avg={avg:.2f} ratio={lv/avg if avg>0 else 0:.2f}")
     ratio = lv / avg if avg > 0 else 0
     vroc = ((lv - vols[-11]) / vols[-11] * 100) if len(vols) >= 11 and vols[-11] > 0 else 0
     up = closes[-1] >= closes[-2]

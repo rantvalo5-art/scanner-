@@ -278,17 +278,16 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
 
     rsi_str = f"{rsi:.1f}" if rsi else "N/A"
     print(f"    RSI={rsi_str} Score={score} OBV={obv_trend} Spike={spike_r:.1f}x MACD={macd_dir}")
-    print(f"    DEBUG: obv_down enabled={is_enabled(coin,'obv_down',global_triggers,coin_triggers)} can_send={can_send(coin,'obv_down')}")
 
     def chk(t): return is_enabled(coin, t, global_triggers, coin_triggers) and can_send(coin, t)
     def gv(t, d): return get_val(t, global_triggers, d)
 
     # RSI solo — fire whenever condition is true
-    if rsi and rsi < gv("rsi_low", 30) and chk("rsi_low"):
+    if rsi is not None and rsi < gv("rsi_low", 30) and chk("rsi_low"):
         mark_sent(coin, "rsi_low")
         send_telegram(f"📉 <b>RSI BAJO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (oversold ✅)")
 
-    if rsi and rsi > gv("rsi_high", 70) and chk("rsi_high"):
+    if rsi is not None and rsi > gv("rsi_high", 70) and chk("rsi_high"):
         mark_sent(coin, "rsi_high")
         send_telegram(f"📈 <b>RSI ALTO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (overbought ⚠️)")
 
@@ -312,20 +311,20 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
         send_telegram(f"⚡ <b>VOLUME SPIKE VERDE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x + vela verde 🔥\nCompra masiva detectada")
 
     # MACD cross solo (solo cuando cruza)
-    if macd_dir == "up" and prev_macd != "up" and chk("macd_up"):
+    if macd_dir == "up" and chk("macd_up"):
         mark_sent(coin, "macd_up")
         send_telegram(f"📊 <b>MACD CRUCE ALCISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó de negativo a positivo\nMomentum cambia a alcista ✅")
 
-    if macd_dir == "down" and prev_macd != "down" and chk("macd_down"):
+    if macd_dir == "down" and chk("macd_down"):
         mark_sent(coin, "macd_down")
         send_telegram(f"📊 <b>MACD CRUCE BAJISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó de positivo a negativo\nMomentum cambia a bajista ⚠️")
 
     # Combined
-    if rsi and rsi < gv("mr", 35) and obv_trend == "up" and chk("mr"):
+    if rsi is not None and rsi < gv("mr", 35) and obv_trend == "up" and chk("mr"):
         mark_sent(coin, "mr")
         send_telegram(f"🔥 <b>MEAN REVERSION</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} ✅  OBV: acumulando ↑\nPuntaje: {score:+d}")
 
-    if rsi and rsi > gv("ob", 70) and obv_trend == "down" and chk("ob"):
+    if rsi is not None and rsi > gv("ob", 70) and obv_trend == "down" and chk("ob"):
         mark_sent(coin, "ob")
         send_telegram(f"🚨 <b>OVERBOUGHT COMBO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} ⚠️  OBV: distribuyendo ↓")
 

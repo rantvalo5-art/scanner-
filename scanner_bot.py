@@ -278,11 +278,12 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
 
     rsi_str = f"{rsi:.1f}" if rsi else "N/A"
     print(f"    RSI={rsi_str} Score={score} OBV={obv_trend} Spike={spike_r:.1f}x MACD={macd_dir}")
+    print(f"    DEBUG: obv_down enabled={is_enabled(coin,'obv_down',global_triggers,coin_triggers)} can_send={can_send(coin,'obv_down')}")
 
     def chk(t): return is_enabled(coin, t, global_triggers, coin_triggers) and can_send(coin, t)
     def gv(t, d): return get_val(t, global_triggers, d)
 
-    # RSI solo
+    # RSI solo — fire whenever condition is true
     if rsi and rsi < gv("rsi_low", 30) and chk("rsi_low"):
         mark_sent(coin, "rsi_low")
         send_telegram(f"📉 <b>RSI BAJO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (oversold ✅)")
@@ -291,14 +292,14 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
         mark_sent(coin, "rsi_high")
         send_telegram(f"📈 <b>RSI ALTO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (overbought ⚠️)")
 
-    # OBV solo (solo cuando cambia)
-    if obv_trend == "up" and prev_obv != "up" and chk("obv_up"):
+    # OBV — fire whenever condition is true (cooldown prevents spam)
+    if obv_trend == "up" and chk("obv_up"):
         mark_sent(coin, "obv_up")
-        send_telegram(f"↑ <b>OBV ACUMULANDO</b>\n<b>{coin}/USDT</b> — ${px}\nOBV cambió a tendencia alcista\nCompradores entrando silenciosamente")
+        send_telegram(f"↑ <b>OBV ACUMULANDO</b>\n<b>{coin}/USDT</b> — ${px}\nCompradores entrando silenciosamente")
 
-    if obv_trend == "down" and prev_obv != "down" and chk("obv_down"):
+    if obv_trend == "down" and chk("obv_down"):
         mark_sent(coin, "obv_down")
-        send_telegram(f"↓ <b>OBV DISTRIBUYENDO</b>\n<b>{coin}/USDT</b> — ${px}\nOBV cambió a tendencia bajista\nVendedores saliendo silenciosamente")
+        send_telegram(f"↓ <b>OBV DISTRIBUYENDO</b>\n<b>{coin}/USDT</b> — ${px}\nVendedores saliendo silenciosamente")
 
     # Volume Spike solo
     if spike_r >= gv("spike_solo", 3.0) and chk("spike_solo"):

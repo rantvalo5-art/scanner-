@@ -195,7 +195,7 @@ button.active{background:#1e3a0f;border-color:#4a7c2f;color:#7bc142}
 <div class="wrap">
   <div class="nav">
     <div>
-      <div class="ttl">Crypto Signal Scanner Pro 2</div>
+      <div class="ttl">Crypto Signal Scanner Pro asd</div>
       <div class="sub">RSI · EMA · MACD · Bollinger · Volumen + Backtesting</div>
     </div>
     <div class="nav-left">
@@ -444,10 +444,28 @@ function drawChart(canvasId,prices){
 }
 
 async function fetchTF(coin,tf,limit=100){
-  const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=${limit}`);
-  if(!r.ok)throw new Error();
-  const rows=await r.json();
-  return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[5])),rows};
+  if(limit<=1000){
+    const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=${limit}`);
+    if(!r.ok)throw new Error();
+    const rows=await r.json();
+    return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[5])),rows};
+  }
+  // paginated fetch for >1000 candles
+  const pages=Math.ceil(limit/1000);
+  let allRows=[];
+  let endTime=null;
+  for(let p=0;p<pages;p++){
+    let url=`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=1000`;
+    if(endTime)url+=`&endTime=${endTime}`;
+    const r=await fetch(url);
+    if(!r.ok)throw new Error();
+    const rows=await r.json();
+    if(!rows.length)break;
+    allRows=[...rows,...allRows];
+    endTime=rows[0][0]-1;
+  }
+  allRows=allRows.slice(-limit);
+  return{closes:allRows.map(k=>parseFloat(k[4])),vols:allRows.map(k=>parseFloat(k[5])),rows:allRows};
 }
 
 async function loadCoin(coin){
@@ -749,14 +767,13 @@ async function runMeanReversion(){
 
 function calcMeanReversionTrades(closes,vols,rows,rsiIn,rsiOut,tp,sl){
   const trades=[];let equity=1000;const equityCurve=[{t:rows[Math.min(35,rows.length-1)][0],v:equity}];
-  let inTrade=false;let entryPrice=0;let entryIdx=0;
+  let inTrade=false;let entryPrice=0;let entryIdx=0;let cooldown=0;
   for(let i=35;i<closes.length-1;i++){
     const wc=closes.slice(0,i+1);
     const rsi=calcRSI(wc);
-    if(!inTrade&&rsi!==null&&rsi<rsiIn){
-      const prevRsi=calcRSI(closes.slice(0,i));
-      const greenCandle=closes[i]>closes[i-1];
-      if(greenCandle){inTrade=true;entryPrice=closes[i+1];entryIdx=i+1;}
+    if(cooldown>0)cooldown--;
+    if(!inTrade&&cooldown===0&&rsi!==null&&rsi<rsiIn){
+      inTrade=true;entryPrice=closes[i+1];entryIdx=i+1;
     }
     if(inTrade){
       const current=closes[i+1];
@@ -771,7 +788,7 @@ function calcMeanReversionTrades(closes,vols,rows,rsiIn,rsiOut,tp,sl){
         equity=equity*(1+realPnl);
         trades.push({date:fmtDate(rows[entryIdx][0]),exitDate:fmtDate(rows[i+1][0]),entry:entryPrice,exit:exitPrice,pnl:realPnl*100,result:hitTP?'win':hitSL?'loss':hitRSI?'win':'open',equityAfter:equity});
         equityCurve.push({t:rows[i+1][0],v:equity});
-        inTrade=false;
+        inTrade=false;cooldown=3;
       }
     }
   }

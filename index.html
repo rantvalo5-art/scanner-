@@ -812,7 +812,7 @@ function setAlert(coin){
   renderCard(coin,false,false);
   if(stateLoaded)saveState();
   if(Notification.permission==='default')Notification.requestPermission();
-  showToast(`💰 Alerta: ${coin} ${arrow} $${fmtPrice(val)}`);
+  showToast(`💰 Alerta: ${coin} ${arrow} $${raw}`);
 }
 function clearAlert(coin,idx){
   if(idx===undefined){delete alerts[coin];}
@@ -868,7 +868,7 @@ function renderCard(coin,loading,err){
     const alertListHTML=coinAlerts.map((a,i)=>{
       const arrow=a.dir==='below'?'↓':'↑';
       const cls=a.dir==='below'?'ir':'ib';
-      const tStr=a.targetStr||fmtTarget(a.target);
+      const tStr=a.targetStr||String(a.target);
       return`<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
         <span class="${cls}" style="font-size:10px">${arrow} $${tStr}</span>
         <span onclick="clearAlert('${coin}',${i})" style="font-size:10px;color:#636b78;cursor:pointer;padding:0 3px">×</span>

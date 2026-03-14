@@ -234,7 +234,7 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
 <div class="wrap">
   <div class="nav">
     <div>
-      <div class="ttl">Crypto Signal Scanner Pro</div>
+      <div class="ttl">Crypto Signal Scanner Pro ueno bank</div>
       <div class="sub">RSI · EMA · MACD · Bollinger · Volumen + Backtesting</div>
     </div>
     <div class="nav-left">
@@ -1522,6 +1522,8 @@ function checkTriggers(coin,d){
 const SUPA_HEADERS={'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};
 
 async function saveState(){
+  // Never save empty coins array — prevents wiping data during load
+  if(!stateLoaded) return;
   try{
     const alertsToSave={};
     Object.keys(alerts).forEach(k=>{alertsToSave[k]=alerts[k];});
@@ -1597,16 +1599,33 @@ async function loadState(){
 }
 
 const _origQuickAdd=quickAdd;
-quickAdd=function(c){_origQuickAdd(c);saveState();};
-
 const _origRemoveCoin=removeCoin;
-removeCoin=function(coin){_origRemoveCoin(coin);saveState();};
 
+// Block saveState during initial load
 let stateLoaded=false;
+
+// Override quickAdd — only save AFTER initial load is complete
+quickAdd=function(c){
+  _origQuickAdd(c);
+  if(stateLoaded) saveState();
+};
+
+// Override removeCoin — always save (user action)
+removeCoin=function(coin){
+  _origRemoveCoin(coin);
+  if(stateLoaded) saveState();
+};
+
 document.getElementById('tf').addEventListener('change',()=>{if(stateLoaded)saveState();});
 document.getElementById('ci').addEventListener('keydown',e=>{if(e.key==='Enter')addCoin();});
 loadMarket();
-loadState().then(had=>{stateLoaded=true;if(!had)showToast('Agrega monedas para comenzar');});
+
+// Load state — only enable saveState AFTER all coins are loaded
+loadState().then(had=>{
+  stateLoaded=true;
+  if(!had)showToast('Agrega monedas para comenzar');
+  console.log('State loaded, saveState now enabled. Coins:', coins);
+});
 
 </script>
 </body>

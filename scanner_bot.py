@@ -396,28 +396,39 @@ def run():
         if new_state:
             new_states[coin] = new_state
 
-        # Check price alerts
+        # Check price alerts (supports multiple alerts per coin as array)
         if coin in raw_alerts and new_state:
-            alert = raw_alerts[coin]
-            price = new_state.get("rsi")  # we need price — fetch it
             try:
                 closes, _ = fetch_klines(coin, timeframe, 10)
                 current_price = closes[-1]
-                target = float(alert.get("target", 0))
-                direction = alert.get("dir", "")
-                hit = (direction == "below" and current_price <= target) or \
-                      (direction == "above" and current_price >= target)
-                if hit:
-                    arrow = "↓" if direction == "below" else "↑"
-                    label = "bajó de" if direction == "below" else "subió a"
-                    print(f"  💰 Price alert hit for {coin}! {arrow} ${fmt_price(target)}")
-                    send_telegram(
-                        f"💰 <b>ALERTA DE PRECIO</b>\n"
-                        f"<b>{coin}/USDT</b>\n"
-                        f"Precio actual: ${fmt_price(current_price)}\n"
-                        f"{arrow} {label} ${fmt_price(target)}"
-                    )
-                    alerts_to_delete.append(coin)
+                coin_alerts = raw_alerts[coin]
+                # Handle both old single-object format and new array format
+                if isinstance(coin_alerts, dict):
+                    coin_alerts = [coin_alerts]
+                remaining = []
+                for alert in coin_alerts:
+                    target = float(alert.get("target", 0))
+                    direction = alert.get("dir", "")
+                    hit = (direction == "below" and current_price <= target) or \
+                          (direction == "above" and current_price >= target)
+                    if hit:
+                        arrow = "↓" if direction == "below" else "↑"
+                        label = "bajó de" if direction == "below" else "subió a"
+                        print(f"  💰 Price alert hit: {coin} {arrow} ${fmt_price(target)}")
+                        send_telegram(
+                            f"💰 <b>ALERTA DE PRECIO</b>\n"
+                            f"<b>{coin}/USDT</b>\n"
+                            f"Precio actual: ${fmt_price(current_price)}\n"
+                            f"{arrow} {label} ${fmt_price(target)}"
+                        )
+                    else:
+                        remaining.append(alert)
+                # Update alerts — remove triggered ones
+                if len(remaining) != len(coin_alerts):
+                    if remaining:
+                        raw_alerts[coin] = remaining
+                    else:
+                        alerts_to_delete.append(coin)
             except Exception as e:
                 print(f"  ⚠️ Price alert check error for {coin}: {e}")
 

@@ -274,6 +274,8 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
         print(f"  ❌ Fetch error for {coin}: {e}")
         return {}
 
+    print(f"    DEBUG closes[-3:]: {closes[-3:]}")
+    print(f"    DEBUG vols[-3:]: {vols[-3:]}")
     rsi   = calc_rsi(closes)
     macd  = calc_macd(closes)
     em    = calc_ema_cross(closes)

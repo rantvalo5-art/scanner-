@@ -144,9 +144,7 @@ def fmt_target(p, target_str=None):
 # ============ BINANCE ============
 
 def fetch_realtime_price(symbol):
-    """Fetch current real-time price from multiple sources"""
-
-    # 1. Binance ticker — true real-time, works from GitHub Actions
+    """Fetch real-time price from Binance only — single source of truth"""
     try:
         url = f"{BINANCE_BASE}/ticker/price"
         params = {"symbol": f"{symbol}USDT"}
@@ -156,39 +154,6 @@ def fetch_realtime_price(symbol):
             if "price" in data:
                 return float(data["price"])
     except: pass
-
-    # 2. OKX ticker
-    try:
-        url = "https://www.okx.com/api/v5/market/ticker"
-        params = {"instId": f"{symbol}-USDT"}
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        data = r.json()
-        if data.get("code") == "0" and data.get("data"):
-            return float(data["data"][0]["last"])
-    except: pass
-
-    # 3. KuCoin ticker
-    try:
-        url = f"https://api.kucoin.com/api/v1/market/orderbook/level1"
-        params = {"symbol": f"{symbol}-USDT"}
-        r = requests.get(url, params=params, timeout=10)
-        data = r.json()
-        if data.get("code") == "200000":
-            return float(data["data"]["price"])
-    except: pass
-
-    # 4. Gate.io ticker
-    try:
-        url = "https://api.gateio.ws/api/v4/spot/tickers"
-        params = {"currency_pair": f"{symbol}_USDT"}
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        data = r.json()
-        if isinstance(data, list) and data:
-            return float(data[0]["last"])
-    except: pass
-
     return None
 
     return None

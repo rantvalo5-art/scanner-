@@ -723,25 +723,22 @@ function drawChart(canvasId,d){
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
 async function fetchTF(coin,tf,limit=100){
-  const okxTF={'1h':'1H','4h':'4H','1d':'1D'};
-  const bar=okxTF[tf]||'1H';
-
-  // 1. Try OKX first (works globally, no geo restrictions)
-  for(let attempt=0;attempt<3;attempt++){
+  // Binance with retry + longer backoff to avoid rate limiting
+  for(let attempt=0;attempt<4;attempt++){
     try{
-      const url=`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${bar}&limit=${Math.min(limit,300)+1}`;
-      const r=await fetch(url);
-      if(!r.ok)throw new Error('OKX HTTP '+r.status);
-      const data=await r.json();
-      if(data.code!=='0'||!data.data||!data.data.length)throw new Error('OKX: '+data.msg);
-      const rows=[...data.data].reverse().slice(0,-1);
-      const closes=rows.map(k=>parseFloat(k[4]));
-      const vols=rows.map(k=>parseFloat(k[7]));
-      const fakeRows=rows.map(k=>[parseInt(k[0]),k[1],k[2],k[3],k[4],k[7]]);
-      return{closes,vols,rows:fakeRows};
+      const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=${Math.min(limit,1000)}`);
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const rows=await r.json();
+      if(!Array.isArray(rows)||rows.length<10)throw new Error('Not enough data');
+      return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[5])),rows};
     }catch(e){
-      if(attempt<2)await sleep(400*(attempt+1));
-      else throw e;
+      if(attempt<3){
+        const wait=[1000,2000,4000][attempt];
+        console.warn(`${coin} fetch attempt ${attempt+1} failed, retrying in ${wait}ms...`);
+        await sleep(wait);
+      } else {
+        throw e;
+      }
     }
   }
 }
@@ -756,11 +753,13 @@ async function loadCoin(coin){
     const spike=calcVolSpike(vols,closes);
     const{score,sigs}=analyze(rsi,macd,em,bb,vol);
     const chg24=((closes[closes.length-1]-parseFloat(rows[0][1]))/parseFloat(rows[0][1]))*100;
-    const[r1h,r4h,r1d]=await Promise.all([
-      fetchTF(coin,'1h',100).then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
-      fetchTF(coin,'4h',100).then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
-      fetchTF(coin,'1d',100).then(d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score).catch(()=>null),
-    ]);
+    // Sequential TF requests to avoid rate limiting
+    const calcScore=d=>analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score;
+    const r1h=await fetchTF(coin,'1h',100).then(d=>calcScore(d)).catch(()=>null);
+    await sleep(500);
+    const r4h=await fetchTF(coin,'4h',100).then(d=>calcScore(d)).catch(()=>null);
+    await sleep(500);
+    const r1d=await fetchTF(coin,'1d',100).then(d=>calcScore(d)).catch(()=>null);
     cdata[coin]={symbol:coin,price:closes[closes.length-1],chg24,score,sigs,rsiVal:rsi,obv,spike,sparkPrices:closes.slice(-50),sparkVols:vols.slice(-50),sparkRSI:closes.slice(-50).map((_,i,arr)=>i<14?null:calcRSI(arr.slice(0,i+1))),sparkOBV:calcOBV(vols,closes)?calcOBV(vols,closes).values:null,tf1h:r1h,tf4h:r4h,tf1d:r1d};
     if(!history_[coin])history_[coin]=[];
     history_[coin].unshift({time:new Date().toLocaleTimeString('es-PY'),score});
@@ -1063,10 +1062,10 @@ async function loadMarket(){
 }
 async function refreshAll(){
   if(!coins.length)return;
-  // Load coins sequentially with small delay to avoid rate limiting
+  // Load coins sequentially with longer delay to avoid Binance rate limiting
   for(let i=0;i<coins.length;i++){
     await loadCoin(coins[i]);
-    if(i<coins.length-1)await sleep(200);
+    if(i<coins.length-1)await sleep(1500);
   }
   document.getElementById('lu').textContent='Actualizado: '+new Date().toLocaleTimeString('es-PY');
   applyFilter();loadMarket();

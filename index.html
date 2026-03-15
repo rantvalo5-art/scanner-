@@ -720,13 +720,18 @@ function drawChart(canvasId,d){
   }
 }
 
+async function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
 async function fetchTF(coin,tf,limit=100){
-  if(limit<=1000){
-    const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=${limit}`);
-    if(!r.ok)throw new Error();
-    const rows=await r.json();
-    return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[5])),rows};
-  }
+  // Retry up to 3 times with exponential backoff
+  for(let attempt=0;attempt<3;attempt++){
+    try{
+      if(limit<=1000){
+        const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=${limit}`);
+        if(!r.ok)throw new Error('HTTP '+r.status);
+        const rows=await r.json();
+        return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[5])),rows};
+      }
   // paginated fetch for >1000 candles
   const pages=Math.ceil(limit/1000);
   let allRows=[];
@@ -741,8 +746,13 @@ async function fetchTF(coin,tf,limit=100){
     allRows=[...rows,...allRows];
     endTime=rows[0][0]-1;
   }
-  allRows=allRows.slice(-limit);
-  return{closes:allRows.map(k=>parseFloat(k[4])),vols:allRows.map(k=>parseFloat(k[5])),rows:allRows};
+      allRows=allRows.slice(-limit);
+      return{closes:allRows.map(k=>parseFloat(k[4])),vols:allRows.map(k=>parseFloat(k[5])),rows:allRows};
+    }catch(e){
+      if(attempt<2){await sleep(500*(attempt+1));}
+      else{throw e;}
+    }
+  }
 }
 
 async function loadCoin(coin){
@@ -1060,7 +1070,17 @@ async function loadMarket(){
       <div style="margin-left:auto;font-size:11px;color:#3d4452">Si BTC cae, las altcoins caen primero</div>`;
   }catch(e){}
 }
-async function refreshAll(){if(!coins.length)return;await Promise.all(coins.map(c=>loadCoin(c)));document.getElementById('lu').textContent='Actualizado: '+new Date().toLocaleTimeString('es-PY');applyFilter();loadMarket();if(currentView==='table')renderTable();}
+async function refreshAll(){
+  if(!coins.length)return;
+  // Load coins sequentially with small delay to avoid rate limiting
+  for(let i=0;i<coins.length;i++){
+    await loadCoin(coins[i]);
+    if(i<coins.length-1)await sleep(200);
+  }
+  document.getElementById('lu').textContent='Actualizado: '+new Date().toLocaleTimeString('es-PY');
+  applyFilter();loadMarket();
+  if(currentView==='table')renderTable();
+}
 function addCoin(){const inp=document.getElementById('ci');const c=inp.value.trim().toUpperCase().replace(/USDT$/,'');if(!c)return;inp.value='';quickAdd(c);}
 function quickAdd(c){if(coins.includes(c))return;coins.push(c);loadCoin(c);}
 function removeCoin(coin){coins=coins.filter(x=>x!==coin);delete cdata[coin];delete alerts[coin];delete history_[coin];const el=document.getElementById('c-'+coin);if(el)el.remove();if(!coins.length){const g=document.getElementById('grid');const em=document.createElement('div');em.id='empty-msg';em.className='empty';em.textContent='Agrega una moneda para comenzar';g.appendChild(em);document.getElementById('lu').textContent='';}}

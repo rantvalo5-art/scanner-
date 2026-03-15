@@ -349,10 +349,19 @@ def mark_sent(coin, trigger_type):
 
 def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
     print(f"\n  Checking {coin} ({interval})...")
-    try:
-        closes, vols = fetch_klines(coin, interval, 100)
-    except Exception as e:
-        print(f"  ❌ Fetch error for {coin}: {e}")
+    closes, vols = None, None
+    for attempt in range(3):
+        try:
+            closes, vols = fetch_klines(coin, interval, 100)
+            break
+        except Exception as e:
+            if attempt < 2:
+                print(f"  ⚠️ Retry {attempt+2}/3 for {coin}: {e}")
+                time.sleep(2)
+            else:
+                print(f"  ❌ Fetch error for {coin}: {e}")
+                return {}
+    if not closes:
         return {}
 
     rsi   = calc_rsi(closes)
@@ -530,7 +539,7 @@ def run():
             except Exception as e:
                 print(f"  ⚠️ Price alert check error for {coin}: {e}")
 
-        time.sleep(0.3)
+        time.sleep(1.0)  # avoid rate limiting
 
     # Remove triggered price alerts from Supabase
     if alerts_to_delete:

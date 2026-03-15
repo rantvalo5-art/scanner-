@@ -803,8 +803,8 @@ function setAlert(coin){
   const raw=inp.value.trim().replace(',','.');
   const val=parseFloat(raw);
   if(!val||isNaN(val)){showToast('Precio inválido — usa punto decimal (ej: 1.415)','err');return;}
-  const current=cdata[coin]?cdata[coin].price:0;
-  const dir=val<current?'below':'above';
+  const dirSel=document.getElementById('ad-'+coin);
+  const dir=dirSel?dirSel.value:(val<(cdata[coin]?cdata[coin].price:0)?'below':'above');
   const arrow=dir==='below'?'↓ baja de':'↑ sube a';
   if(!alerts[coin])alerts[coin]=[];
   alerts[coin].push({target:val,targetStr:raw,dir});
@@ -877,7 +877,11 @@ function renderCard(coin,loading,err){
     const alertHTML=`<div class="alert-row" style="flex-direction:column;align-items:stretch;gap:5px">
       ${alertListHTML}
       <div style="display:flex;gap:5px">
-        <input class="alert-inp" id="ai-${coin}" placeholder="Ej: 1.415" type="text" inputmode="decimal" style="flex:1"/>
+        <select id="ad-${coin}" style="padding:4px 6px;font-size:11px;border:1px solid #2e3340;border-radius:6px;background:#1e2128;color:#c8cdd5;outline:none;flex-shrink:0">
+          <option value="above">↑ sube a</option>
+          <option value="below">↓ baja de</option>
+        </select>
+        <input class="alert-inp" id="ai-${coin}" placeholder="Precio..." type="text" inputmode="decimal" style="flex:1"/>
         <button class="alert-btn" onclick="setAlert('${coin}')">+ Alerta</button>
       </div>
     </div>`;

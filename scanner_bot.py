@@ -224,19 +224,43 @@ def fetch_klines(symbol, interval="4h", limit=100):
             raise
 
     # 3. KuCoin fallback — for coins not on OKX (e.g. DEXE)
-    interval_map_kc = {"1h": "1hour", "4h": "4hour", "1d": "1day"}
-    kc_interval = interval_map_kc.get(interval, "4hour")
-    url = "https://api.kucoin.com/api/v1/market/candles"
-    params = {"symbol": f"{symbol}-USDT", "type": kc_interval}
-    r = requests.get(url, params=params, timeout=10)
-    r.raise_for_status()
-    data = r.json()
-    if data.get("code") != "200000":
-        raise Exception(f"KuCoin error: {data.get('msg')}")
-    rows = list(reversed(data["data"]))[-limit-1:-1]
-    closes = [float(row[2]) for row in rows]
-    vols   = [float(row[6]) for row in rows]
-    return closes, vols
+    try:
+        interval_map_kc = {"1h": "1hour", "4h": "4hour", "1d": "1day"}
+        kc_interval = interval_map_kc.get(interval, "4hour")
+        url = "https://api.kucoin.com/api/v1/market/candles"
+        params = {"symbol": f"{symbol}-USDT", "type": kc_interval}
+        r = requests.get(url, params=params, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if data.get("code") != "200000":
+            raise Exception(f"KuCoin error: {data.get('msg')}")
+        rows = list(reversed(data["data"]))[-limit-1:-1]
+        closes = [float(row[2]) for row in rows]
+        vols   = [float(row[6]) for row in rows]
+        return closes, vols
+    except Exception as e:
+        pass  # KuCoin failed, try Gate.io
+
+    # 4. Gate.io — last resort for exotic pairs like COS
+    try:
+        interval_map_gate = {"1h": "1h", "4h": "4h", "1d": "1d"}
+        gate_interval = interval_map_gate.get(interval, "4h")
+        url = "https://api.gateio.ws/api/v4/spot/candlesticks"
+        params = {"currency_pair": f"{symbol}_USDT", "interval": gate_interval, "limit": limit + 1}
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, list) or len(data) < 10:
+            raise Exception(f"Gate.io no data for {symbol}")
+        rows = data[:-1]  # drop last incomplete candle
+        closes = [float(row[2]) for row in rows]
+        vols   = [float(row[5]) for row in rows]
+        return closes, vols
+    except Exception as e:
+        pass
+
+    raise Exception(f"No data source available for {symbol}")
     try:
         url = f"{BINANCE_BASE}/klines"
         params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit + 1}
@@ -484,7 +508,7 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
         send_telegram(f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score}/-5</b>")
 
     # Return new state for this coin
-    return {"obv": obv_trend, "macd": macd_dir, "rsi": rsi, "score": score, "price": price}
+    return {"obv": obv_trend, "macd": macd_dir, "rsi": rsi, "score": score}
 
 # ============ RUN ============
 
@@ -550,11 +574,15 @@ def run():
         if new_state:
             new_states[coin] = new_state
 
-        # Check price alerts using price from last candle (already fetched above)
+        # Check price alerts using REAL-TIME price
         if coin in raw_alerts and new_state:
             try:
-                current_price = new_state.get("price")
-                print(f"  💰 {coin} price: ${fmt_price(current_price)}")
+                current_price = fetch_realtime_price(coin)
+                if current_price is None:
+                    # fallback to last candle close
+                    closes, _ = fetch_klines(coin, timeframe, 10)
+                    current_price = closes[-1]
+                print(f"  💰 {coin} real-time price: ${fmt_price(current_price)}")
                 coin_alerts = raw_alerts[coin]
                 if isinstance(coin_alerts, dict):
                     coin_alerts = [coin_alerts]

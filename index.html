@@ -590,7 +590,7 @@ function fmtTarget(p){
 function fmtDate(ts){const d=new Date(ts);return d.toLocaleDateString('es-PY',{month:'short',day:'numeric'});}
 
 /* ============ SCANNER ============ */
-let coins=[],cdata={},alerts={},history_={},autoTimer=null,autoOn=false,currentFilter='all',sortAsc=false;
+let coins=[],cdata={},alerts={},history_={},autoTimer=null,autoOn=false,currentFilter='all',sortAsc=false,isLoading=false;
 
 function drawChart(canvasId,d){
   const canvas=document.getElementById(canvasId);if(!canvas)return;
@@ -733,8 +733,8 @@ async function fetchTF(coin,tf,limit=100){
       return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[5])),rows};
     }catch(e){
       if(attempt<3){
-        const wait=[1000,2000,4000][attempt];
-        console.warn(`${coin} fetch attempt ${attempt+1} failed, retrying in ${wait}ms...`);
+        const wait=[2000,4000,8000][attempt];
+        console.warn(`${coin} ${tf} attempt ${attempt+1} failed (${e.message}), retrying in ${wait}ms...`);
         await sleep(wait);
       } else {
         throw e;
@@ -1062,14 +1062,20 @@ async function loadMarket(){
 }
 async function refreshAll(){
   if(!coins.length)return;
-  // Load coins sequentially with longer delay to avoid Binance rate limiting
-  for(let i=0;i<coins.length;i++){
-    await loadCoin(coins[i]);
-    if(i<coins.length-1)await sleep(1500);
+  if(isLoading){console.log('Already loading, skipping...');return;}
+  isLoading=true;
+  document.getElementById('lu').textContent='Cargando...';
+  try{
+    for(let i=0;i<coins.length;i++){
+      await loadCoin(coins[i]);
+      if(i<coins.length-1)await sleep(1500);
+    }
+    document.getElementById('lu').textContent='Actualizado: '+new Date().toLocaleTimeString('es-PY');
+    applyFilter();loadMarket();
+    if(currentView==='table')renderTable();
+  }finally{
+    isLoading=false;
   }
-  document.getElementById('lu').textContent='Actualizado: '+new Date().toLocaleTimeString('es-PY');
-  applyFilter();loadMarket();
-  if(currentView==='table')renderTable();
 }
 function addCoin(){const inp=document.getElementById('ci');const c=inp.value.trim().toUpperCase().replace(/USDT$/,'');if(!c)return;inp.value='';quickAdd(c);}
 function quickAdd(c){if(coins.includes(c))return;coins.push(c);loadCoin(c);}

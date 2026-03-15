@@ -723,7 +723,7 @@ function drawChart(canvasId,d){
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
 async function fetchTF(coin,tf,limit=100){
-  // Binance with retry + longer backoff to avoid rate limiting
+  // 1. Binance with retry + longer backoff to avoid rate limiting
   for(let attempt=0;attempt<4;attempt++){
     try{
       const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=${Math.min(limit,1000)}`);
@@ -737,10 +737,47 @@ async function fetchTF(coin,tf,limit=100){
         console.warn(`${coin} ${tf} attempt ${attempt+1} failed (${e.message}), retrying in ${wait}ms...`);
         await sleep(wait);
       } else {
-        throw e;
+        console.warn(`${coin} Binance failed, trying OKX fallback...`);
       }
     }
   }
+  // 2. OKX fallback — handles rate-limit / geo-block from Binance
+  try{
+    const barMap={'1h':'1H','4h':'4H','1d':'1D'};
+    const bar=barMap[tf]||'4H';
+    const r=await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${bar}&limit=${Math.min(limit+1,300)}`);
+    if(!r.ok)throw new Error('OKX HTTP '+r.status);
+    const data=await r.json();
+    if(data.code!=='0'||!data.data||data.data.length<10)throw new Error('OKX no data');
+    const rows=[...data.data].reverse().slice(0,-1); // newest-first → oldest-first, drop last incomplete
+    const closes=rows.map(k=>parseFloat(k[4]));
+    const vols=rows.map(k=>parseFloat(k[7]));
+    // build synthetic Binance-style rows for chg24 calc: [open,_,_,_,close,vol]
+    const synth=rows.map(k=>[k[1],k[2],k[3],k[4],k[4],k[7]]);
+    console.log(`${coin} loaded from OKX (${rows.length} candles)`);
+    return{closes,vols,rows:synth};
+  }catch(e){
+    console.warn(`${coin} OKX failed: ${e.message}, trying KuCoin...`);
+  }
+  // 3. KuCoin last resort
+  try{
+    const kcMap={'1h':'1hour','4h':'4hour','1d':'1day'};
+    const type=kcMap[tf]||'4hour';
+    const r=await fetch(`https://api.kucoin.com/api/v1/market/candles?symbol=${coin}-USDT&type=${type}`);
+    if(!r.ok)throw new Error('KuCoin HTTP '+r.status);
+    const data=await r.json();
+    if(data.code!=='200000'||!data.data||data.data.length<10)throw new Error('KuCoin no data');
+    // KuCoin: newest first → reverse, take last `limit`
+    const rows=[...data.data].reverse().slice(-Math.min(limit,data.data.length));
+    const closes=rows.map(k=>parseFloat(k[2]));
+    const vols=rows.map(k=>parseFloat(k[5]));
+    const synth=rows.map(k=>[k[1],k[1],k[1],k[1],k[2],k[5]]);
+    console.log(`${coin} loaded from KuCoin (${rows.length} candles)`);
+    return{closes,vols,rows:synth};
+  }catch(e){
+    console.warn(`${coin} KuCoin failed: ${e.message}`);
+  }
+  throw new Error(`No data source available for ${coin}`);
 }
 
 async function loadCoin(coin){
@@ -784,19 +821,26 @@ function testTelegram(){
 
 function checkAlert(coin,price){
   if(!alerts[coin]||!alerts[coin].length)return;
-  const triggered=[];
-  alerts[coin]=alerts[coin].filter(a=>{
+  // Cooldown key: prevent repeated Telegram spam for same alert
+  if(!checkAlert._cd)checkAlert._cd={};
+  const now=Date.now();
+  let anyHit=false;
+  alerts[coin].forEach(a=>{
     const hit=(a.dir==='below'&&price<=a.target)||(a.dir==='above'&&price>=a.target);
     if(hit){
+      const cdKey=`${coin}_${a.dir}_${a.target}`;
+      const last=checkAlert._cd[cdKey]||0;
+      if(now-last<300000)return; // 5-min cooldown, don't spam
+      checkAlert._cd[cdKey]=now;
       const arrow=a.dir==='below'?'↓':'↑';
       showToast(`💰 ${coin} ${arrow} $${fmtPrice(a.target)}!`,'warn');
-      sendTelegram(`💰 <b>ALERTA DE PRECIO</b>\n<b>${coin}/USDT</b>\nPrecio: $${fmtPrice(price)}\nTarget: ${arrow} $${fmtPrice(a.target)}`);
+      sendTelegram(`💰 <b>ALERTA DE PRECIO</b>\n<b>${coin}/USDT</b>\nPrecio: $${fmtPrice(price)}\nTarget: ${arrow} $${a.targetStr||fmtPrice(a.target)}`);
       if(Notification.permission==='granted')new Notification(`💰 ${coin}`,{body:`$${fmtPrice(price)}`});
-      triggered.push(a);
+      anyHit=true;
     }
-    return !hit;
   });
-  if(triggered.length){if(stateLoaded)saveState();renderCard(coin,false,false);}
+  // Alerts are persistent — never delete them on hit, only re-render
+  if(anyHit){renderCard(coin,false,false);}
 }
 function setAlert(coin){
   const inp=document.getElementById('ai-'+coin);

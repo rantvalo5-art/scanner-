@@ -128,11 +128,18 @@ def analyze(rsi, macd, em, bb, vol):
     return score
 
 def fmt_price(p):
-    if p < 0.0001: return f"{p:.7f}"
-    if p < 0.01:   return f"{p:.6f}"
-    if p < 1:      return f"{p:.4f}"
-    if p < 1000:   return f"{p:.2f}"
-    return f"{p:,.0f}"
+    if p < 0.000001: return f"{p:.9f}"
+    if p < 0.0001:   return f"{p:.7f}"
+    if p < 0.01:     return f"{p:.6f}"
+    if p < 1:        return f"{p:.4f}"
+    if p < 1000:     return f"{p:.4f}"
+    return f"{p:,.2f}"
+
+def fmt_target(p, target_str=None):
+    """Use exact string if available, otherwise fmt_price"""
+    if target_str:
+        return target_str
+    return fmt_price(p)
 
 # ============ BINANCE ============
 
@@ -505,12 +512,13 @@ def run():
                     if hit:
                         arrow = "↓" if direction == "below" else "↑"
                         label = "bajó de" if direction == "below" else "subió a"
-                        print(f"  💰 Price alert hit: {coin} {arrow} ${fmt_price(target)}")
+                        target_str = alert.get("targetStr", None)
+                        print(f"  💰 Price alert hit: {coin} {arrow} ${fmt_target(target, target_str)}")
                         send_telegram(
                             f"💰 <b>ALERTA DE PRECIO</b>\n"
                             f"<b>{coin}/USDT</b>\n"
                             f"Precio actual: ${fmt_price(current_price)}\n"
-                            f"{arrow} {label} ${fmt_price(target)}"
+                            f"{arrow} {label} ${fmt_target(target, target_str)}"
                         )
                     else:
                         remaining.append(alert)

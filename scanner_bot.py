@@ -335,7 +335,25 @@ def get_val(trigger_type, global_triggers, default):
 # ============ COOLDOWN ============
 
 SENT_ALERTS = {}
-COOLDOWN_SECS = 300  # 5 minutes default
+COOLDOWN_SECS = 300
+
+def load_sent_alerts():
+    try:
+        state = load_state()
+        if state and state.get("sent_alerts"):
+            data = state["sent_alerts"]
+            if isinstance(data, str):
+                data = json.loads(data)
+            return {k: float(v) for k, v in data.items()}
+    except: pass
+    return {}
+
+def save_sent_alerts():
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/scanner_state?id=eq.default"
+        requests.patch(url, headers=SUPA_HEADERS,
+                      json={"sent_alerts": SENT_ALERTS}, timeout=10)
+    except: pass
 
 def can_send(coin, trigger_type):
     key = f"{coin}_{trigger_type}"
@@ -468,6 +486,14 @@ def run():
         print("⚠️  No coins configured. Add coins in the scanner first.")
         return
 
+    # Load sent alerts from Supabase to maintain cooldown across executions
+    global SENT_ALERTS
+    SENT_ALERTS = load_sent_alerts()
+    # Clean old entries (older than 1 hour)
+    now_ts = time.time()
+    SENT_ALERTS = {k: v for k, v in SENT_ALERTS.items() if now_ts - v < 3600}
+    print(f"🕐 Loaded {len(SENT_ALERTS)} cooldown entries")
+
     timeframe = state.get("timeframe", "4h")
 
     raw_global = state.get("global_triggers") or {}
@@ -552,6 +578,9 @@ def run():
             print(f"  ✅ Removed triggered alerts: {alerts_to_delete}")
         except Exception as e:
             print(f"  ⚠️ Could not update alerts: {e}")
+
+    # Save sent alerts to Supabase for cooldown persistence
+    save_sent_alerts()
 
     # Save new states back to Supabase
     try:

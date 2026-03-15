@@ -723,36 +723,39 @@ function drawChart(canvasId,d){
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
 async function fetchTF(coin,tf,limit=100){
-  // 1. Binance with retry + longer backoff to avoid rate limiting
-  for(let attempt=0;attempt<4;attempt++){
+  // 1. Binance — skip immediately on 429, retry on other errors
+  for(let attempt=0;attempt<3;attempt++){
     try{
       const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=${Math.min(limit,1000)}`);
+      if(r.status===429||r.status===418){
+        console.warn(`${coin} Binance rate-limited (${r.status}), switching to OKX immediately`);
+        break; // skip to OKX right away, no retries
+      }
       if(!r.ok)throw new Error('HTTP '+r.status);
       const rows=await r.json();
       if(!Array.isArray(rows)||rows.length<10)throw new Error('Not enough data');
       return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[5])),rows};
     }catch(e){
-      if(attempt<3){
-        const wait=[2000,4000,8000][attempt];
+      if(attempt<2){
+        const wait=[2000,5000][attempt];
         console.warn(`${coin} ${tf} attempt ${attempt+1} failed (${e.message}), retrying in ${wait}ms...`);
         await sleep(wait);
       } else {
-        console.warn(`${coin} Binance failed, trying OKX fallback...`);
+        console.warn(`${coin} Binance exhausted, trying OKX...`);
       }
     }
   }
-  // 2. OKX fallback — handles rate-limit / geo-block from Binance
+  // 2. OKX fallback
   try{
     const barMap={'1h':'1H','4h':'4H','1d':'1D'};
     const bar=barMap[tf]||'4H';
     const r=await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${bar}&limit=${Math.min(limit+1,300)}`);
     if(!r.ok)throw new Error('OKX HTTP '+r.status);
     const data=await r.json();
-    if(data.code!=='0'||!data.data||data.data.length<10)throw new Error('OKX no data');
-    const rows=[...data.data].reverse().slice(0,-1); // newest-first → oldest-first, drop last incomplete
+    if(data.code!=='0'||!data.data||data.data.length<10)throw new Error('OKX no data: '+data.msg);
+    const rows=[...data.data].reverse().slice(0,-1);
     const closes=rows.map(k=>parseFloat(k[4]));
     const vols=rows.map(k=>parseFloat(k[7]));
-    // build synthetic Binance-style rows for chg24 calc: [open,_,_,_,close,vol]
     const synth=rows.map(k=>[k[1],k[2],k[3],k[4],k[4],k[7]]);
     console.log(`${coin} loaded from OKX (${rows.length} candles)`);
     return{closes,vols,rows:synth};
@@ -767,7 +770,6 @@ async function fetchTF(coin,tf,limit=100){
     if(!r.ok)throw new Error('KuCoin HTTP '+r.status);
     const data=await r.json();
     if(data.code!=='200000'||!data.data||data.data.length<10)throw new Error('KuCoin no data');
-    // KuCoin: newest first → reverse, take last `limit`
     const rows=[...data.data].reverse().slice(-Math.min(limit,data.data.length));
     const closes=rows.map(k=>parseFloat(k[2]));
     const vols=rows.map(k=>parseFloat(k[5]));

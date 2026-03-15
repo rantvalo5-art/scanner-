@@ -723,36 +723,33 @@ function drawChart(canvasId,d){
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
 async function fetchTF(coin,tf,limit=100){
-  // Retry up to 3 times with exponential backoff
-  for(let attempt=0;attempt<3;attempt++){
+  // 1. Try Binance with retry
+  for(let attempt=0;attempt<2;attempt++){
     try{
-      if(limit<=1000){
-        const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=${limit}`);
-        if(!r.ok)throw new Error('HTTP '+r.status);
-        const rows=await r.json();
-        return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[5])),rows};
-      }
-  // paginated fetch for >1000 candles
-  const pages=Math.ceil(limit/1000);
-  let allRows=[];
-  let endTime=null;
-  for(let p=0;p<pages;p++){
-    let url=`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=1000`;
-    if(endTime)url+=`&endTime=${endTime}`;
-    const r=await fetch(url);
-    if(!r.ok)throw new Error();
-    const rows=await r.json();
-    if(!rows.length)break;
-    allRows=[...rows,...allRows];
-    endTime=rows[0][0]-1;
-  }
-      allRows=allRows.slice(-limit);
-      return{closes:allRows.map(k=>parseFloat(k[4])),vols:allRows.map(k=>parseFloat(k[5])),rows:allRows};
+      const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=${Math.min(limit,1000)+1}`);
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const rows=(await r.json()).slice(0,-1);
+      if(rows.length<10)throw new Error('Not enough data');
+      const fakeTs=rows.map((_,i)=>[i*1000]);
+      return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[5])),rows};
     }catch(e){
-      if(attempt<2){await sleep(500*(attempt+1));}
-      else{throw e;}
+      if(attempt<1)await sleep(600);
     }
   }
+  // 2. Fallback: OKX
+  const okxTF={'1h':'1H','4h':'4H','1d':'1D'};
+  const bar=okxTF[tf]||'1H';
+  const r=await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${bar}&limit=${Math.min(limit,300)+1}`);
+  if(!r.ok)throw new Error('OKX HTTP '+r.status);
+  const data=await r.json();
+  if(data.code!=='0'||!data.data||!data.data.length)throw new Error('OKX: '+data.msg);
+  // OKX: [ts,open,high,low,close,vol,volCcy,volCcyQuote] newest first
+  const rows=[...data.data].reverse().slice(0,-1);
+  const closes=rows.map(k=>parseFloat(k[4]));
+  const vols=rows.map(k=>parseFloat(k[7]));
+  // Build fake rows array compatible with existing code
+  const fakeRows=rows.map((k,i)=>[parseInt(k[0]),k[1],k[2],k[3],k[4],k[7]]);
+  return{closes,vols,rows:fakeRows};
 }
 
 async function loadCoin(coin){

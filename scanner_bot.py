@@ -144,8 +144,28 @@ def fmt_target(p, target_str=None):
 # ============ BINANCE ============
 
 def fetch_realtime_price(symbol):
-    """Fetch current real-time price — not last closed candle"""
-    # Try OKX ticker
+    """Fetch current real-time price from multiple sources"""
+    # Map common symbols to CoinGecko IDs
+    COINGECKO_IDS = {
+        "BTC":"bitcoin","ETH":"ethereum","XRP":"ripple","DOGE":"dogecoin",
+        "ADA":"cardano","SOL":"solana","BNB":"binancecoin","PEPE":"pepe",
+        "SHIB":"shiba-inu","AVAX":"avalanche-2","LINK":"chainlink",
+        "RENDER":"render-token","TAO":"bittensor","DEXE":"dexe",
+        "SAHARA":"sahara-ai","COS":"contentos",
+    }
+
+    # 1. CoinGecko — free, no key, very reliable
+    try:
+        cg_id = COINGECKO_IDS.get(symbol, symbol.lower())
+        url = f"https://api.coingecko.com/api/v3/simple/price"
+        params = {"ids": cg_id, "vs_currencies": "usd"}
+        r = requests.get(url, params=params, timeout=10)
+        data = r.json()
+        if cg_id in data and "usd" in data[cg_id]:
+            return float(data[cg_id]["usd"])
+    except: pass
+
+    # 2. OKX ticker
     try:
         url = "https://www.okx.com/api/v5/market/ticker"
         params = {"instId": f"{symbol}-USDT"}
@@ -155,7 +175,8 @@ def fetch_realtime_price(symbol):
         if data.get("code") == "0" and data.get("data"):
             return float(data["data"][0]["last"])
     except: pass
-    # Fallback: KuCoin ticker
+
+    # 3. KuCoin ticker
     try:
         url = f"https://api.kucoin.com/api/v1/market/orderbook/level1"
         params = {"symbol": f"{symbol}-USDT"}
@@ -164,6 +185,9 @@ def fetch_realtime_price(symbol):
         if data.get("code") == "200000":
             return float(data["data"]["price"])
     except: pass
+
+    return None
+
     return None
 
 def fetch_klines(symbol, interval="4h", limit=100):

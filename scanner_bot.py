@@ -574,11 +574,13 @@ def run():
         if new_state:
             new_states[coin] = new_state
 
-        # Check price alerts using price from last candle (already fetched above)
+        # Check price alerts using real-time price (CoinGecko/OKX/KuCoin)
         if coin in raw_alerts and new_state:
             try:
-                current_price = new_state.get("price")
-                print(f"  💰 {coin} price: ${fmt_price(current_price)}")
+                current_price = fetch_realtime_price(coin)
+                if current_price is None:
+                    current_price = new_state.get("price")  # fallback to candle price
+                print(f"  💰 {coin} real-time price: ${fmt_price(current_price)}")
                 coin_alerts = raw_alerts[coin]
                 if isinstance(coin_alerts, dict):
                     coin_alerts = [coin_alerts]

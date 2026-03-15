@@ -518,7 +518,7 @@ def run():
     if raw_alerts:
         print(f"💰 Price alerts: {list(raw_alerts.keys())}")
 
-    alerts_to_delete = []
+    alerts_triggered = []
     new_states = {}
 
     for coin in coins:
@@ -538,13 +538,14 @@ def run():
                 coin_alerts = raw_alerts[coin]
                 if isinstance(coin_alerts, dict):
                     coin_alerts = [coin_alerts]
-                remaining = []
                 for alert in coin_alerts:
                     target = float(alert.get("target", 0))
                     direction = alert.get("dir", "")
                     hit = (direction == "below" and current_price <= target) or \
                           (direction == "above" and current_price >= target)
-                    if hit:
+                    alert_key = f"{coin}_price_{direction}_{target}"
+                    if hit and can_send(coin, f"price_{direction}_{target}"):
+                        mark_sent(coin, f"price_{direction}_{target}")
                         arrow = "↓" if direction == "below" else "↑"
                         label = "bajó de" if direction == "below" else "subió a"
                         target_str = alert.get("targetStr", None)
@@ -555,29 +556,13 @@ def run():
                             f"Precio actual: ${fmt_price(current_price)}\n"
                             f"{arrow} {label} ${fmt_target(target, target_str)}"
                         )
-                    else:
-                        remaining.append(alert)
-                if len(remaining) != len(coin_alerts):
-                    if remaining:
-                        raw_alerts[coin] = remaining
-                    else:
-                        alerts_to_delete.append(coin)
+                # Alerts are persistent — never delete them
             except Exception as e:
                 print(f"  ⚠️ Price alert check error for {coin}: {e}")
 
         time.sleep(1.0)  # avoid rate limiting
 
-    # Remove triggered price alerts from Supabase
-    if alerts_to_delete:
-        for coin in alerts_to_delete:
-            raw_alerts.pop(coin, None)
-        try:
-            url = f"{SUPABASE_URL}/rest/v1/scanner_state?id=eq.default"
-            requests.patch(url, headers=SUPA_HEADERS,
-                         json={"alerts": raw_alerts}, timeout=10)
-            print(f"  ✅ Removed triggered alerts: {alerts_to_delete}")
-        except Exception as e:
-            print(f"  ⚠️ Could not update alerts: {e}")
+    # Price alerts are persistent — no deletion needed
 
     # Save sent alerts to Supabase for cooldown persistence
     save_sent_alerts()

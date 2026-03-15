@@ -188,6 +188,8 @@ def fetch_realtime_price(symbol):
 
     return None
 
+    return None
+
 def fetch_klines(symbol, interval="4h", limit=100):
     # 1. Try Binance global
     try:
@@ -234,6 +236,52 @@ def fetch_klines(symbol, interval="4h", limit=100):
     rows = list(reversed(data["data"]))[-limit-1:-1]
     closes = [float(row[2]) for row in rows]
     vols   = [float(row[6]) for row in rows]
+    return closes, vols
+    try:
+        url = f"{BINANCE_BASE}/klines"
+        params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit + 1}
+        r = requests.get(url, params=params, timeout=10)
+        if r.status_code == 200:
+            rows = r.json()[:-1]
+            return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
+    except: pass
+
+    # 2. OKX — works from GitHub Actions
+    try:
+        interval_map = {"1h": "1H", "4h": "4H", "1d": "1D"}
+        okx_bar = interval_map.get(interval, "4H")
+        url = "https://www.okx.com/api/v5/market/candles"
+        params = {"instId": f"{symbol}-USDT", "bar": okx_bar, "limit": str(limit + 1)}
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if data.get("code") != "0":
+            raise Exception(f"OKX error: {data.get('msg')}")
+        rows = list(reversed(data["data"]))[:-1]
+        closes = [float(row[4]) for row in rows]
+        vols   = [float(row[7]) for row in rows]
+        return closes, vols
+    except Exception as e:
+        if "OKX error" in str(e):
+            pass  # pair not found on OKX, try KuCoin
+        else:
+            raise
+
+    # 3. KuCoin fallback — for coins not on OKX (e.g. DEXE)
+    interval_map_kc = {"1h": "1hour", "4h": "4hour", "1d": "1day"}
+    kc_interval = interval_map_kc.get(interval, "4hour")
+    url = "https://api.kucoin.com/api/v1/market/candles"
+    params = {"symbol": f"{symbol}-USDT", "type": kc_interval}
+    r = requests.get(url, params=params, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    if data.get("code") != "200000":
+        raise Exception(f"KuCoin error: {data.get('msg')}")
+    # KuCoin: [timestamp, open, close, high, low, volume, turnover] newest first
+    rows = list(reversed(data["data"]))[-limit-1:-1]
+    closes = [float(row[2]) for row in rows]
+    vols   = [float(row[6]) for row in rows]  # turnover in USDT
     return closes, vols
 
 
@@ -436,7 +484,7 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
         send_telegram(f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score}/-5</b>")
 
     # Return new state for this coin
-    return {"obv": obv_trend, "macd": macd_dir, "rsi": rsi, "score": score}
+    return {"obv": obv_trend, "macd": macd_dir, "rsi": rsi, "score": score, "price": price}
 
 # ============ RUN ============
 
@@ -502,15 +550,11 @@ def run():
         if new_state:
             new_states[coin] = new_state
 
-        # Check price alerts using REAL-TIME price
+        # Check price alerts using price from last candle (already fetched above)
         if coin in raw_alerts and new_state:
             try:
-                current_price = fetch_realtime_price(coin)
-                if current_price is None:
-                    # fallback to last candle close
-                    closes, _ = fetch_klines(coin, timeframe, 10)
-                    current_price = closes[-1]
-                print(f"  💰 {coin} real-time price: ${fmt_price(current_price)}")
+                current_price = new_state.get("price")
+                print(f"  💰 {coin} price: ${fmt_price(current_price)}")
                 coin_alerts = raw_alerts[coin]
                 if isinstance(coin_alerts, dict):
                     coin_alerts = [coin_alerts]

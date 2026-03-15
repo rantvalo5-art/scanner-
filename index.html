@@ -784,7 +784,7 @@ async function loadCoin(coin){
     if(!history_[coin])history_[coin]=[];
     history_[coin].unshift({time:new Date().toLocaleTimeString('es-PY'),score});
     if(history_[coin].length>10)history_[coin].pop();
-    checkTriggers(coin,cdata[coin]);
+    if(autoOn)checkTriggers(coin,cdata[coin]); // only fire alerts during active auto-refresh, not on page load
     renderCard(coin,false,false);applyFilter();
   }catch(e){renderCard(coin,false,true);}
 }
@@ -802,23 +802,32 @@ function testTelegram(){
   ).then(()=>showToast('✅ Mensaje enviado a Telegram!'));
 }
 
+function _loadAlertCD(){
+  try{const s=localStorage.getItem('alert_cd');return s?JSON.parse(s):{};}catch(e){return{};}
+}
+function _saveAlertCD(cd){
+  try{localStorage.setItem('alert_cd',JSON.stringify(cd));}catch(e){}
+}
+
 function checkAlert(coin,price){
   if(!alerts[coin]||!alerts[coin].length)return;
-  if(!checkAlert._cd)checkAlert._cd={};
   const now=Date.now();
-  let anyHit=false;
+  const COOLDOWN=30*60*1000; // 30 minutes — persists across reloads
+  const cd=_loadAlertCD();
+  let changed=false;
   alerts[coin].forEach(a=>{
     const hit=(a.dir==='below'&&price<=a.target)||(a.dir==='above'&&price>=a.target);
     if(!hit)return;
     const cdKey=`${coin}_${a.dir}_${a.target}`;
-    if(now-(checkAlert._cd[cdKey]||0)<300000)return; // 5-min cooldown
-    checkAlert._cd[cdKey]=now;
+    if(now-(cd[cdKey]||0)<COOLDOWN)return; // still in cooldown — skip
+    cd[cdKey]=now;
+    changed=true;
     const arrow=a.dir==='below'?'↓':'↑';
     showToast(`💰 ${coin} ${arrow} $${fmtPrice(a.target)}!`,'warn');
     sendTelegram(`💰 <b>ALERTA DE PRECIO</b>\n<b>${coin}/USDT</b>\nPrecio: $${fmtPrice(price)}\nTarget: ${arrow} $${a.targetStr||fmtPrice(a.target)}`);
     if(Notification.permission==='granted')new Notification(`💰 ${coin}`,{body:`$${fmtPrice(price)}`});
-    anyHit=true;
   });
+  if(changed)_saveAlertCD(cd);
   // Alerts are persistent — never delete on hit
   // Do NOT call renderCard or saveState here — loadCoin handles render after this
 }
@@ -832,6 +841,9 @@ function setAlert(coin){
   const arrow=dir==='below'?'↓ baja de':'↑ sube a';
   if(!alerts[coin])alerts[coin]=[];
   alerts[coin].push({target:val,targetStr:raw,dir});
+  // Pre-seed cooldown so alert doesn't fire immediately if price already meets condition
+  if(!checkAlert._cd)checkAlert._cd={};
+  checkAlert._cd[`${coin}_${dir}_${val}`]=Date.now();
   inp.value='';
   renderCard(coin,false,false);
   if(stateLoaded)saveState();
@@ -839,8 +851,22 @@ function setAlert(coin){
   showToast(`💰 Alerta: ${coin} ${arrow} $${raw}`);
 }
 function clearAlert(coin,idx){
-  if(idx===undefined){delete alerts[coin];}
-  else{if(alerts[coin])alerts[coin].splice(idx,1);if(alerts[coin]&&!alerts[coin].length)delete alerts[coin];}
+  // Also clear the cooldown for removed alerts so they fire fresh if re-added
+  const cd=_loadAlertCD();
+  let cdChanged=false;
+  if(idx===undefined){
+    // Remove all cooldowns for this coin
+    Object.keys(cd).forEach(k=>{if(k.startsWith(coin+'_')){delete cd[k];cdChanged=true;}});
+    delete alerts[coin];
+  }else{
+    if(alerts[coin]){
+      const a=alerts[coin][idx];
+      if(a){const cdKey=`${coin}_${a.dir}_${a.target}`;if(cd[cdKey]){delete cd[cdKey];cdChanged=true;}}
+      alerts[coin].splice(idx,1);
+      if(!alerts[coin].length)delete alerts[coin];
+    }
+  }
+  if(cdChanged)_saveAlertCD(cd);
   if(stateLoaded)saveState();renderCard(coin,false,false);
 }
 

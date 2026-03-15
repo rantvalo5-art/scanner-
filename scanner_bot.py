@@ -145,24 +145,16 @@ def fmt_target(p, target_str=None):
 
 def fetch_realtime_price(symbol):
     """Fetch current real-time price from multiple sources"""
-    # Map common symbols to CoinGecko IDs
-    COINGECKO_IDS = {
-        "BTC":"bitcoin","ETH":"ethereum","XRP":"ripple","DOGE":"dogecoin",
-        "ADA":"cardano","SOL":"solana","BNB":"binancecoin","PEPE":"pepe",
-        "SHIB":"shiba-inu","AVAX":"avalanche-2","LINK":"chainlink",
-        "RENDER":"render-token","TAO":"bittensor","DEXE":"dexe",
-        "SAHARA":"sahara-ai","COS":"contentos",
-    }
 
-    # 1. CoinGecko — free, no key, very reliable
+    # 1. Binance ticker — true real-time, works from GitHub Actions
     try:
-        cg_id = COINGECKO_IDS.get(symbol, symbol.lower())
-        url = f"https://api.coingecko.com/api/v3/simple/price"
-        params = {"ids": cg_id, "vs_currencies": "usd"}
+        url = f"{BINANCE_BASE}/ticker/price"
+        params = {"symbol": f"{symbol}USDT"}
         r = requests.get(url, params=params, timeout=10)
-        data = r.json()
-        if cg_id in data and "usd" in data[cg_id]:
-            return float(data[cg_id]["usd"])
+        if r.status_code == 200:
+            data = r.json()
+            if "price" in data:
+                return float(data["price"])
     except: pass
 
     # 2. OKX ticker
@@ -184,6 +176,17 @@ def fetch_realtime_price(symbol):
         data = r.json()
         if data.get("code") == "200000":
             return float(data["data"]["price"])
+    except: pass
+
+    # 4. Gate.io ticker
+    try:
+        url = "https://api.gateio.ws/api/v4/spot/tickers"
+        params = {"currency_pair": f"{symbol}_USDT"}
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        data = r.json()
+        if isinstance(data, list) and data:
+            return float(data[0]["last"])
     except: pass
 
     return None

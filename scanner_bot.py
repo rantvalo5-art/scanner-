@@ -508,7 +508,7 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
         send_telegram(f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score}/-5</b>")
 
     # Return new state for this coin
-    return {"obv": obv_trend, "macd": macd_dir, "rsi": rsi, "score": score}
+    return {"obv": obv_trend, "macd": macd_dir, "rsi": rsi, "score": score, "price": price}
 
 # ============ RUN ============
 
@@ -574,15 +574,11 @@ def run():
         if new_state:
             new_states[coin] = new_state
 
-        # Check price alerts using REAL-TIME price
+        # Check price alerts using price from last candle (already fetched above)
         if coin in raw_alerts and new_state:
             try:
-                current_price = fetch_realtime_price(coin)
-                if current_price is None:
-                    # fallback to last candle close
-                    closes, _ = fetch_klines(coin, timeframe, 10)
-                    current_price = closes[-1]
-                print(f"  💰 {coin} real-time price: ${fmt_price(current_price)}")
+                current_price = new_state.get("price")
+                print(f"  💰 {coin} price: ${fmt_price(current_price)}")
                 coin_alerts = raw_alerts[coin]
                 if isinstance(coin_alerts, dict):
                     coin_alerts = [coin_alerts]

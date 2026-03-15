@@ -136,7 +136,30 @@ def fmt_price(p):
 
 # ============ BINANCE ============
 
-def fetch_klines(symbol, interval="4h", limit=100):
+def fetch_realtime_price(symbol):
+    """Fetch current real-time price — not last closed candle"""
+    # Try OKX ticker
+    try:
+        url = "https://www.okx.com/api/v5/market/ticker"
+        params = {"instId": f"{symbol}-USDT"}
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        data = r.json()
+        if data.get("code") == "0" and data.get("data"):
+            return float(data["data"][0]["last"])
+    except: pass
+    # Fallback: KuCoin ticker
+    try:
+        url = f"https://api.kucoin.com/api/v1/market/orderbook/level1"
+        params = {"symbol": f"{symbol}-USDT"}
+        r = requests.get(url, params=params, timeout=10)
+        data = r.json()
+        if data.get("code") == "200000":
+            return float(data["data"]["price"])
+    except: pass
+    return None
+
+
     # 1. Try Binance global
     try:
         url = f"{BINANCE_BASE}/klines"
@@ -416,13 +439,16 @@ def run():
         if new_state:
             new_states[coin] = new_state
 
-        # Check price alerts (supports multiple alerts per coin as array)
+        # Check price alerts using REAL-TIME price
         if coin in raw_alerts and new_state:
             try:
-                closes, _ = fetch_klines(coin, timeframe, 10)
-                current_price = closes[-1]
+                current_price = fetch_realtime_price(coin)
+                if current_price is None:
+                    # fallback to last candle close
+                    closes, _ = fetch_klines(coin, timeframe, 10)
+                    current_price = closes[-1]
+                print(f"  💰 {coin} real-time price: ${fmt_price(current_price)}")
                 coin_alerts = raw_alerts[coin]
-                # Handle both old single-object format and new array format
                 if isinstance(coin_alerts, dict):
                     coin_alerts = [coin_alerts]
                 remaining = []
@@ -443,7 +469,6 @@ def run():
                         )
                     else:
                         remaining.append(alert)
-                # Update alerts — remove triggered ones
                 if len(remaining) != len(coin_alerts):
                     if remaining:
                         raw_alerts[coin] = remaining

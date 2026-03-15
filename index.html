@@ -732,25 +732,18 @@ async function fetchTF(coin,tf,limit=100){
       const rows=await r.json();
       if(!Array.isArray(rows)||rows.length<10)throw new Error('Not enough data');
       return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[5])),rows};
-    }catch(e){
-      if(attempt<2)await sleep([2000,5000][attempt]);
-    }
+    }catch(e){if(attempt<2)await sleep([2000,5000][attempt]);}
   }
   // 2. OKX fallback
   try{
     const barMap={'1h':'1H','4h':'4H','1d':'1D'};
-    const bar=barMap[tf]||'4H';
-    const r=await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${bar}&limit=${Math.min(limit+1,300)}`);
+    const r=await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${barMap[tf]||'4H'}&limit=${Math.min(limit+1,300)}`);
     if(!r.ok)throw new Error('OKX HTTP '+r.status);
     const data=await r.json();
     if(data.code!=='0'||!data.data||data.data.length<10)throw new Error('OKX no data');
     const rows=[...data.data].reverse().slice(0,-1);
-    const closes=rows.map(k=>parseFloat(k[4]));
-    const vols=rows.map(k=>parseFloat(k[7]));
-    const synth=rows.map(k=>[k[1],k[2],k[3],k[4],k[4],k[7]]);
-    console.log(`${coin} loaded from OKX`);
-    return{closes,vols,rows:synth};
-  }catch(e){console.warn(`${coin} OKX failed: ${e.message}`);}
+    return{closes:rows.map(k=>parseFloat(k[4])),vols:rows.map(k=>parseFloat(k[7])),rows:rows.map(k=>[k[1],k[2],k[3],k[4],k[4],k[7]])};
+  }catch(e){console.warn(`${coin} OKX: ${e.message}`);}
   // 3. KuCoin last resort
   try{
     const kcMap={'1h':'1hour','4h':'4hour','1d':'1day'};
@@ -759,25 +752,16 @@ async function fetchTF(coin,tf,limit=100){
     const data=await r.json();
     if(data.code!=='200000'||!data.data||data.data.length<10)throw new Error('KuCoin no data');
     const rows=[...data.data].reverse().slice(-Math.min(limit,data.data.length));
-    const closes=rows.map(k=>parseFloat(k[2]));
-    const vols=rows.map(k=>parseFloat(k[5]));
-    const synth=rows.map(k=>[k[1],k[1],k[1],k[1],k[2],k[5]]);
-    console.log(`${coin} loaded from KuCoin`);
-    return{closes,vols,rows:synth};
-  }catch(e){console.warn(`${coin} KuCoin failed: ${e.message}`);}
+    return{closes:rows.map(k=>parseFloat(k[2])),vols:rows.map(k=>parseFloat(k[5])),rows:rows.map(k=>[k[1],k[1],k[1],k[1],k[2],k[5]])};
+  }catch(e){console.warn(`${coin} KuCoin: ${e.message}`);}
   throw new Error(`No data source for ${coin}`);
 }
 
 async function safeFetchScore(coin,tf){
-  // fetchTF wrapper that NEVER throws — always returns null on any error
-  // This prevents secondary TF failures from crashing the main loadCoin
   try{
     const d=await fetchTF(coin,tf,100);
     return analyze(calcRSI(d.closes),calcMACD(d.closes),calcEMA(d.closes),calcBB(d.closes),calcVol(d.vols,d.closes)).score;
-  }catch(e){
-    console.warn(`${coin} ${tf} score failed: ${e.message}`);
-    return null;
-  }
+  }catch(e){return null;}
 }
 
 async function loadCoin(coin){
@@ -790,7 +774,7 @@ async function loadCoin(coin){
     const spike=calcVolSpike(vols,closes);
     const{score,sigs}=analyze(rsi,macd,em,bb,vol);
     const chg24=((closes[closes.length-1]-parseFloat(rows[0][1]))/parseFloat(rows[0][1]))*100;
-    // Use safeFetchScore — secondary TF failures never crash the card
+    // Use safeFetchScore — never throws, secondary failures never crash the card
     const r1h=await safeFetchScore(coin,'1h');
     await sleep(300);
     const r4h=await safeFetchScore(coin,'4h');
@@ -802,10 +786,7 @@ async function loadCoin(coin){
     if(history_[coin].length>10)history_[coin].pop();
     checkTriggers(coin,cdata[coin]);
     renderCard(coin,false,false);applyFilter();
-  }catch(e){
-    console.error(`loadCoin ${coin} failed:`,e);
-    renderCard(coin,false,true);
-  }
+  }catch(e){renderCard(coin,false,true);}
 }
 
 function testTelegram(){
@@ -823,19 +804,23 @@ function testTelegram(){
 
 function checkAlert(coin,price){
   if(!alerts[coin]||!alerts[coin].length)return;
-  const triggered=[];
-  alerts[coin]=alerts[coin].filter(a=>{
+  if(!checkAlert._cd)checkAlert._cd={};
+  const now=Date.now();
+  let anyHit=false;
+  alerts[coin].forEach(a=>{
     const hit=(a.dir==='below'&&price<=a.target)||(a.dir==='above'&&price>=a.target);
-    if(hit){
-      const arrow=a.dir==='below'?'↓':'↑';
-      showToast(`💰 ${coin} ${arrow} $${fmtPrice(a.target)}!`,'warn');
-      sendTelegram(`💰 <b>ALERTA DE PRECIO</b>\n<b>${coin}/USDT</b>\nPrecio: $${fmtPrice(price)}\nTarget: ${arrow} $${fmtPrice(a.target)}`);
-      if(Notification.permission==='granted')new Notification(`💰 ${coin}`,{body:`$${fmtPrice(price)}`});
-      triggered.push(a);
-    }
-    return !hit;
+    if(!hit)return;
+    const cdKey=`${coin}_${a.dir}_${a.target}`;
+    if(now-(checkAlert._cd[cdKey]||0)<300000)return; // 5-min cooldown
+    checkAlert._cd[cdKey]=now;
+    const arrow=a.dir==='below'?'↓':'↑';
+    showToast(`💰 ${coin} ${arrow} $${fmtPrice(a.target)}!`,'warn');
+    sendTelegram(`💰 <b>ALERTA DE PRECIO</b>\n<b>${coin}/USDT</b>\nPrecio: $${fmtPrice(price)}\nTarget: ${arrow} $${a.targetStr||fmtPrice(a.target)}`);
+    if(Notification.permission==='granted')new Notification(`💰 ${coin}`,{body:`$${fmtPrice(price)}`});
+    anyHit=true;
   });
-  if(triggered.length){if(stateLoaded)saveState();renderCard(coin,false,false);}
+  // Alerts are persistent — never delete on hit
+  // Do NOT call renderCard or saveState here — loadCoin handles render after this
 }
 function setAlert(coin){
   const inp=document.getElementById('ai-'+coin);

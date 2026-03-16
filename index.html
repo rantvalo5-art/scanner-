@@ -784,7 +784,6 @@ async function loadCoin(coin){
     if(!history_[coin])history_[coin]=[];
     history_[coin].unshift({time:new Date().toLocaleTimeString('es-PY'),score});
     if(history_[coin].length>10)history_[coin].pop();
-    if(autoOn)checkTriggers(coin,cdata[coin]); // only fire alerts during active auto-refresh, not on page load
     renderCard(coin,false,false);applyFilter();
   }catch(e){renderCard(coin,false,true);}
 }
@@ -1593,12 +1592,100 @@ function renderCoinAlerts(){
   ];
   container.innerHTML=coins.map(coin=>{
     if(!coinTriggers[coin])coinTriggers[coin]={};
+    const ct=coinTriggers[coin];
     const chips=types.map(t=>{
-      const on=coinTriggers[coin][t.k]||false;
+      const on=ct[t.k]||false;
       return`<div class="coin-al-chip${on?' on':''}" id="cal-${coin}-${t.k}" onclick="toggleCoin('${coin}','${t.k}')">${t.label}</div>`;
     }).join('');
-    return`<div class="coin-al-row"><div class="coin-al-name">${coin}</div><div style="display:flex;gap:5px;flex-wrap:wrap">${chips}</div></div>`;
+
+    // Individual indicator alerts
+    const rsiLowOn=ct.ind_rsi_low&&ct.ind_rsi_low.on;
+    const rsiHighOn=ct.ind_rsi_high&&ct.ind_rsi_high.on;
+    const scoreUpOn=ct.ind_score_up&&ct.ind_score_up.on;
+    const scoreDownOn=ct.ind_score_down&&ct.ind_score_down.on;
+    const obvUpOn=ct.ind_obv_up&&ct.ind_obv_up.on;
+    const obvDownOn=ct.ind_obv_down&&ct.ind_obv_down.on;
+
+    const indAlerts=`
+      <div style="margin-top:8px;padding:8px 10px;background:#1a1d23;border-radius:8px;border:1px solid #252930">
+        <div style="font-size:10px;color:#4a5260;margin-bottom:7px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Alertas de indicador para ${coin}</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-rsi_low" onclick="toggleIndAlert('${coin}','rsi_low')">${rsiLowOn?'ON':'OFF'}</div>
+            <span style="font-size:12px;color:#c8cdd5">📉 RSI menor a</span>
+            <input type="number" id="ind-val-${coin}-rsi_low" value="${(ct.ind_rsi_low&&ct.ind_rsi_low.val)||30}" min="1" max="99" style="width:52px;padding:3px 6px;font-size:12px;border:1px solid #2e3340;border-radius:5px;background:#21252d;color:#e8ecf0;outline:none" onchange="saveIndAlert('${coin}','rsi_low')">
+            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-rsi_high" onclick="toggleIndAlert('${coin}','rsi_high')">${rsiHighOn?'ON':'OFF'}</div>
+            <span style="font-size:12px;color:#c8cdd5">📈 RSI mayor a</span>
+            <input type="number" id="ind-val-${coin}-rsi_high" value="${(ct.ind_rsi_high&&ct.ind_rsi_high.val)||70}" min="1" max="99" style="width:52px;padding:3px 6px;font-size:12px;border:1px solid #2e3340;border-radius:5px;background:#21252d;color:#e8ecf0;outline:none" onchange="saveIndAlert('${coin}','rsi_high')">
+            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-score_up" onclick="toggleIndAlert('${coin}','score_up')">${scoreUpOn?'ON':'OFF'}</div>
+            <span style="font-size:12px;color:#c8cdd5">💎 Score mayor o igual a</span>
+            <input type="number" id="ind-val-${coin}-score_up" value="${(ct.ind_score_up&&ct.ind_score_up.val)||3}" min="1" max="5" style="width:52px;padding:3px 6px;font-size:12px;border:1px solid #2e3340;border-radius:5px;background:#21252d;color:#e8ecf0;outline:none" onchange="saveIndAlert('${coin}','score_up')">
+            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-score_down" onclick="toggleIndAlert('${coin}','score_down')">${scoreDownOn?'ON':'OFF'}</div>
+            <span style="font-size:12px;color:#c8cdd5">📉 Score menor o igual a</span>
+            <input type="number" id="ind-val-${coin}-score_down" value="${(ct.ind_score_down&&ct.ind_score_down.val)||-3}" min="-5" max="-1" style="width:52px;padding:3px 6px;font-size:12px;border:1px solid #2e3340;border-radius:5px;background:#21252d;color:#e8ecf0;outline:none" onchange="saveIndAlert('${coin}','score_down')">
+            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-obv_up" onclick="toggleIndAlert('${coin}','obv_up')">${obvUpOn?'ON':'OFF'}</div>
+            <span style="font-size:12px;color:#c8cdd5">↑ OBV cambia a acumulando</span>
+            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-obv_down" onclick="toggleIndAlert('${coin}','obv_down')">${obvDownOn?'ON':'OFF'}</div>
+            <span style="font-size:12px;color:#c8cdd5">↓ OBV cambia a distribuyendo</span>
+            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+          </div>
+
+        </div>
+      </div>`;
+
+    return`<div class="coin-al-row" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="coin-al-name">${coin}</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">${chips}</div>
+      </div>
+      ${indAlerts}
+    </div>`;
   }).join('');
+}
+
+function toggleIndAlert(coin,type){
+  if(!coinTriggers[coin])coinTriggers[coin]={};
+  const key=`ind_${type}`;
+  if(!coinTriggers[coin][key])coinTriggers[coin][key]={on:false,val:getIndDefault(type)};
+  coinTriggers[coin][key].on=!coinTriggers[coin][key].on;
+  const el=document.getElementById(`ind-tog-${coin}-${type}`);
+  if(el){el.textContent=coinTriggers[coin][key].on?'ON':'OFF';el.classList.toggle('on',coinTriggers[coin][key].on);}
+  if(stateLoaded)saveState();
+}
+
+function saveIndAlert(coin,type){
+  if(!coinTriggers[coin])coinTriggers[coin]={};
+  const key=`ind_${type}`;
+  const valEl=document.getElementById(`ind-val-${coin}-${type}`);
+  if(!valEl)return;
+  if(!coinTriggers[coin][key])coinTriggers[coin][key]={on:false};
+  coinTriggers[coin][key].val=parseFloat(valEl.value);
+  if(stateLoaded)saveState();
+}
+
+function getIndDefault(type){
+  return{rsi_low:30,rsi_high:70,score_up:3,score_down:-3,obv_up:null,obv_down:null}[type]||null;
 }
 
 async function sendTelegram(msg){

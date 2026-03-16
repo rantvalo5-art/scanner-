@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
-“””
+#!/usr/bin/env python
+"""
 Crypto Signal Scanner Bot
 Corre en PythonAnywhere cada X minutos
 Lee config desde Supabase, calcula indicadores, manda alertas a Telegram
-“””
+"""
 
 import requests
 import json

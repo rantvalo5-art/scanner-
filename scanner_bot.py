@@ -475,6 +475,58 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
         mark_sent(coin, "sell")
         send_telegram(f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score}/-5</b>")
 
+    # ---- Individual indicator alerts per coin ----
+    ct = coin_triggers.get(coin, {})
+
+    def ind_enabled(key): return ct.get(key, {}).get("on", False) if isinstance(ct.get(key), dict) else False
+    def ind_val(key, default): return ct.get(key, {}).get("val", default) if isinstance(ct.get(key), dict) else default
+
+    if ind_enabled("ind_rsi_low") and rsi is not None:
+        threshold = ind_val("ind_rsi_low", 30)
+        if rsi < threshold and can_send(coin, "ind_rsi_low"):
+            mark_sent(coin, "ind_rsi_low")
+            send_telegram(f"📉 <b>RSI BAJO — {coin}</b>
+<b>{coin}/USDT</b> — ${px}
+RSI: {rsi:.1f} (menor a {threshold})")
+
+    if ind_enabled("ind_rsi_high") and rsi is not None:
+        threshold = ind_val("ind_rsi_high", 70)
+        if rsi > threshold and can_send(coin, "ind_rsi_high"):
+            mark_sent(coin, "ind_rsi_high")
+            send_telegram(f"📈 <b>RSI ALTO — {coin}</b>
+<b>{coin}/USDT</b> — ${px}
+RSI: {rsi:.1f} (mayor a {threshold})")
+
+    if ind_enabled("ind_score_up"):
+        threshold = int(ind_val("ind_score_up", 3))
+        if score >= threshold and can_send(coin, "ind_score_up"):
+            mark_sent(coin, "ind_score_up")
+            send_telegram(f"💎 <b>SCORE ALTO — {coin}</b>
+<b>{coin}/USDT</b> — ${px}
+Score: {score:+d} (≥ {threshold})")
+
+    if ind_enabled("ind_score_down"):
+        threshold = int(ind_val("ind_score_down", -3))
+        if score <= threshold and can_send(coin, "ind_score_down"):
+            mark_sent(coin, "ind_score_down")
+            send_telegram(f"📉 <b>SCORE BAJO — {coin}</b>
+<b>{coin}/USDT</b> — ${px}
+Score: {score:+d} (≤ {threshold})")
+
+    if ind_enabled("ind_obv_up"):
+        if obv_trend == "up" and prev_obv != "up" and can_send(coin, "ind_obv_up"):
+            mark_sent(coin, "ind_obv_up")
+            send_telegram(f"↑ <b>OBV ACUMULANDO — {coin}</b>
+<b>{coin}/USDT</b> — ${px}
+OBV cambió a tendencia alcista")
+
+    if ind_enabled("ind_obv_down"):
+        if obv_trend == "down" and prev_obv != "down" and can_send(coin, "ind_obv_down"):
+            mark_sent(coin, "ind_obv_down")
+            send_telegram(f"↓ <b>OBV DISTRIBUYENDO — {coin}</b>
+<b>{coin}/USDT</b> — ${px}
+OBV cambió a tendencia bajista")
+
     # Return new state for this coin
     return {"obv": obv_trend, "macd": macd_dir, "rsi": rsi, "score": score, "price": price}
 

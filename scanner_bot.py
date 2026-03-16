@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""
+“””
 Crypto Signal Scanner Bot
 Corre en PythonAnywhere cada X minutos
 Lee config desde Supabase, calcula indicadores, manda alertas a Telegram
-"""
+“””
 
 import requests
 import json
@@ -12,255 +12,191 @@ import math
 from datetime import datetime
 
 # ============ CONFIG ============
-SUPABASE_URL = "https://ecgdswroygkfckkaguxp.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjZ2Rzd3JveWdrZmNra2FndXhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTUyNzEsImV4cCI6MjA4OTA5MTI3MX0.N_qJsJWTJaqRHpugzlnRTpoZI84mUoctt3RKmUshIrU"
-TG_TOKEN = "8521701026:AAH7tNR4hMf5iR-xS9UgHnQYlrUKnd4Anl8"
-TG_CHAT  = "8576536483"
+
+SUPABASE_URL = “https://ecgdswroygkfckkaguxp.supabase.co”
+SUPABASE_KEY = “eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjZ2Rzd3JveWdrZmNra2FndXhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTUyNzEsImV4cCI6MjA4OTA5MTI3MX0.N_qJsJWTJaqRHpugzlnRTpoZI84mUoctt3RKmUshIrU”
+TG_TOKEN = “8521701026:AAH7tNR4hMf5iR-xS9UgHnQYlrUKnd4Anl8”
+TG_CHAT  = “8576536483”
 
 SUPA_HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json"
+“apikey”: SUPABASE_KEY,
+“Authorization”: f”Bearer {SUPABASE_KEY}”,
+“Content-Type”: “application/json”
 }
 
-BINANCE_BASE = "https://api.binance.com/api/v3"
+BINANCE_BASE = “https://api.binance.com/api/v3”
 
 # ============ MATH ============
 
 def ema(prices, period):
-    k = 2 / (period + 1)
-    e = prices[0]
-    result = []
-    for p in prices:
-        e = p * k + e * (1 - k)
-        result.append(e)
-    return result
+k = 2 / (period + 1)
+e = prices[0]
+result = []
+for p in prices:
+e = p * k + e * (1 - k)
+result.append(e)
+return result
 
 def calc_rsi(closes, period=14):
-    if len(closes) < period + 1:
-        return None
-    ag = al = 0
-    for i in range(1, period + 1):
-        d = closes[i] - closes[i-1]
-        if d > 0: ag += d
-        else: al -= d
-    ag /= period
-    al /= period
-    for i in range(period + 1, len(closes)):
-        d = closes[i] - closes[i-1]
-        ag = (ag * (period - 1) + max(d, 0)) / period
-        al = (al * (period - 1) + max(-d, 0)) / period
-    if al == 0:
-        return 100
-    return 100 - (100 / (1 + ag / al))
+if len(closes) < period + 1:
+return None
+ag = al = 0
+for i in range(1, period + 1):
+d = closes[i] - closes[i-1]
+if d > 0: ag += d
+else: al -= d
+ag /= period
+al /= period
+for i in range(period + 1, len(closes)):
+d = closes[i] - closes[i-1]
+ag = (ag * (period - 1) + max(d, 0)) / period
+al = (al * (period - 1) + max(-d, 0)) / period
+if al == 0:
+return 100
+return 100 - (100 / (1 + ag / al))
 
 def calc_macd(closes):
-    if len(closes) < 35:
-        return None
-    ema12 = ema(closes, 12)
-    ema26 = ema(closes, 26)
-    macd_line = [a - b for a, b in zip(ema12, ema26)]
-    signal = ema(macd_line[-20:], 9)
-    h = macd_line[-1] - signal[-1]
-    ph = macd_line[-2] - signal[-2]
-    return {"h": h, "ph": ph, "up": h > 0 and h > ph, "down": h < 0 and h < ph}
+if len(closes) < 35:
+return None
+ema12 = ema(closes, 12)
+ema26 = ema(closes, 26)
+macd_line = [a - b for a, b in zip(ema12, ema26)]
+signal = ema(macd_line[-20:], 9)
+h = macd_line[-1] - signal[-1]
+ph = macd_line[-2] - signal[-2]
+return {“h”: h, “ph”: ph, “up”: h > 0 and h > ph, “down”: h < 0 and h < ph}
 
 def calc_ema_cross(closes):
-    if len(closes) < 22:
-        return None
-    e9 = ema(closes, 9)
-    e21 = ema(closes, 21)
-    return {"bullish": e9[-1] > e21[-1]}
+if len(closes) < 22:
+return None
+e9 = ema(closes, 9)
+e21 = ema(closes, 21)
+return {“bullish”: e9[-1] > e21[-1]}
 
 def calc_bb(closes, period=20):
-    if len(closes) < period:
-        return None
-    sl = closes[-period:]
-    mid = sum(sl) / period
-    std = math.sqrt(sum((x - mid) ** 2 for x in sl) / period)
-    upper = mid + 2 * std
-    lower = mid - 2 * std
-    rng = upper - lower or 1
-    pct = (closes[-1] - lower) / rng
-    return {"pct": pct}
+if len(closes) < period:
+return None
+sl = closes[-period:]
+mid = sum(sl) / period
+std = math.sqrt(sum((x - mid) ** 2 for x in sl) / period)
+upper = mid + 2 * std
+lower = mid - 2 * std
+rng = upper - lower or 1
+pct = (closes[-1] - lower) / rng
+return {“pct”: pct}
 
 def calc_obv(vols, closes):
-    if len(vols) < 10:
-        return None
-    obv = 0
-    arr = [0]
-    for i in range(1, len(closes)):
-        if closes[i] > closes[i-1]: obv += vols[i]
-        elif closes[i] < closes[i-1]: obv -= vols[i]
-        arr.append(obv)
-    last = arr[-1]
-    prev10 = arr[max(0, len(arr) - 11)]
-    trend = "up" if last > prev10 else "down" if last < prev10 else "flat"
-    return {"trend": trend}
+if len(vols) < 10:
+return None
+obv = 0
+arr = [0]
+for i in range(1, len(closes)):
+if closes[i] > closes[i-1]: obv += vols[i]
+elif closes[i] < closes[i-1]: obv -= vols[i]
+arr.append(obv)
+last = arr[-1]
+prev10 = arr[max(0, len(arr) - 11)]
+trend = “up” if last > prev10 else “down” if last < prev10 else “flat”
+return {“trend”: trend}
 
 def calc_spike(vols, closes):
-    if len(vols) < 20:
-        return None
-    avg = sum(vols[-20:]) / 20
-    lv = vols[-1]
-    ratio = lv / avg if avg > 0 else 0
-    vroc = ((lv - vols[-11]) / vols[-11] * 100) if len(vols) >= 11 and vols[-11] > 0 else 0
-    up = closes[-1] >= closes[-2]
-    return {"ratio": ratio, "vroc": vroc, "up": up}
+if len(vols) < 20:
+return None
+avg = sum(vols[-20:]) / 20
+lv = vols[-1]
+ratio = lv / avg if avg > 0 else 0
+vroc = ((lv - vols[-11]) / vols[-11] * 100) if len(vols) >= 11 and vols[-11] > 0 else 0
+up = closes[-1] >= closes[-2]
+return {“ratio”: ratio, “vroc”: vroc, “up”: up}
 
 def analyze(rsi, macd, em, bb, vol):
-    score = 0
-    if rsi is not None:
-        if rsi < 35: score += 1
-        elif rsi > 65: score -= 1
-    if em:
-        if em["bullish"]: score += 1
-        else: score -= 1
-    if macd:
-        if macd["up"]: score += 1
-        elif macd["down"]: score -= 1
-    if bb:
-        if bb["pct"] < 0.2: score += 1
-        elif bb["pct"] > 0.8: score -= 1
-    if vol:
-        if vol["ratio"] > 1.3 and vol.get("up"): score += 1
-        elif vol["ratio"] > 1.3 and not vol.get("up"): score -= 1
-    return score
+score = 0
+if rsi is not None:
+if rsi < 35: score += 1
+elif rsi > 65: score -= 1
+if em:
+if em[“bullish”]: score += 1
+else: score -= 1
+if macd:
+if macd[“up”]: score += 1
+elif macd[“down”]: score -= 1
+if bb:
+if bb[“pct”] < 0.2: score += 1
+elif bb[“pct”] > 0.8: score -= 1
+if vol:
+if vol[“ratio”] > 1.3 and vol.get(“up”): score += 1
+elif vol[“ratio”] > 1.3 and not vol.get(“up”): score -= 1
+return score
 
 def fmt_price(p):
-    if p < 0.000001: return f"{p:.9f}"
-    if p < 0.0001:   return f"{p:.7f}"
-    if p < 0.01:     return f"{p:.6f}"
-    if p < 1:        return f"{p:.4f}"
-    if p < 1000:     return f"{p:.4f}"
-    return f"{p:,.2f}"
+if p < 0.000001: return f”{p:.9f}”
+if p < 0.0001:   return f”{p:.7f}”
+if p < 0.01:     return f”{p:.6f}”
+if p < 1:        return f”{p:.4f}”
+if p < 1000:     return f”{p:.4f}”
+return f”{p:,.2f}”
 
 def fmt_target(p, target_str=None):
-    """Use exact string if available, otherwise fmt_price"""
-    if target_str:
-        return target_str
-    return fmt_price(p)
+“”“Use exact string if available, otherwise fmt_price”””
+if target_str:
+return target_str
+return fmt_price(p)
 
 # ============ BINANCE ============
 
 def fetch_realtime_price(symbol):
-    """Fetch real-time price from Binance only — single source of truth"""
-    try:
-        url = f"{BINANCE_BASE}/ticker/price"
-        params = {"symbol": f"{symbol}USDT"}
-        r = requests.get(url, params=params, timeout=10)
-        if r.status_code == 200:
-            data = r.json()
-            if "price" in data:
-                return float(data["price"])
-    except: pass
-    return None
+“”“Fetch real-time price from Binance only — single source of truth”””
+try:
+url = f”{BINANCE_BASE}/ticker/price”
+params = {“symbol”: f”{symbol}USDT”}
+r = requests.get(url, params=params, timeout=10)
+if r.status_code == 200:
+data = r.json()
+if “price” in data:
+return float(data[“price”])
+except: pass
+return None
 
-    return None
+```
+return None
+```
 
-def fetch_klines(symbol, interval="4h", limit=100):
-    # 1. Try Binance global
-    try:
-        url = f"{BINANCE_BASE}/klines"
-        params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit + 1}
-        r = requests.get(url, params=params, timeout=10)
-        if r.status_code == 200:
-            rows = r.json()[:-1]
-            return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
-    except: pass
+def fetch_klines(symbol, interval=“4h”, limit=100):
+# 1. Try Binance global
+try:
+url = f”{BINANCE_BASE}/klines”
+params = {“symbol”: f”{symbol}USDT”, “interval”: interval, “limit”: limit + 1}
+r = requests.get(url, params=params, timeout=10)
+if r.status_code == 200:
+rows = r.json()[:-1]
+return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
+except: pass
 
-    # 2. OKX — works from GitHub Actions
-    try:
-        interval_map = {"1h": "1H", "4h": "4H", "1d": "1D"}
-        okx_bar = interval_map.get(interval, "4H")
-        url = "https://www.okx.com/api/v5/market/candles"
-        params = {"instId": f"{symbol}-USDT", "bar": okx_bar, "limit": str(limit + 1)}
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if data.get("code") != "0":
-            raise Exception(f"OKX error: {data.get('msg')}")
-        rows = list(reversed(data["data"]))[:-1]
-        closes = [float(row[4]) for row in rows]
-        vols   = [float(row[7]) for row in rows]
-        return closes, vols
-    except Exception as e:
-        if "OKX error" in str(e):
-            pass  # pair not found on OKX, try KuCoin
-        else:
-            raise
+```
+# 2. OKX — works from GitHub Actions
+try:
+    interval_map = {"1h": "1H", "4h": "4H", "1d": "1D"}
+    okx_bar = interval_map.get(interval, "4H")
+    url = "https://www.okx.com/api/v5/market/candles"
+    params = {"instId": f"{symbol}-USDT", "bar": okx_bar, "limit": str(limit + 1)}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = requests.get(url, params=params, headers=headers, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    if data.get("code") != "0":
+        raise Exception(f"OKX error: {data.get('msg')}")
+    rows = list(reversed(data["data"]))[:-1]
+    closes = [float(row[4]) for row in rows]
+    vols   = [float(row[7]) for row in rows]
+    return closes, vols
+except Exception as e:
+    if "OKX error" in str(e):
+        pass  # pair not found on OKX, try KuCoin
+    else:
+        raise
 
-    # 3. KuCoin fallback — for coins not on OKX (e.g. DEXE)
-    try:
-        interval_map_kc = {"1h": "1hour", "4h": "4hour", "1d": "1day"}
-        kc_interval = interval_map_kc.get(interval, "4hour")
-        url = "https://api.kucoin.com/api/v1/market/candles"
-        params = {"symbol": f"{symbol}-USDT", "type": kc_interval}
-        r = requests.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if data.get("code") != "200000":
-            raise Exception(f"KuCoin error: {data.get('msg')}")
-        rows = list(reversed(data["data"]))[-limit-1:-1]
-        closes = [float(row[2]) for row in rows]
-        vols   = [float(row[6]) for row in rows]
-        return closes, vols
-    except Exception as e:
-        pass  # KuCoin failed, try Gate.io
-
-    # 4. Gate.io — last resort for exotic pairs like COS
-    try:
-        interval_map_gate = {"1h": "1h", "4h": "4h", "1d": "1d"}
-        gate_interval = interval_map_gate.get(interval, "4h")
-        url = "https://api.gateio.ws/api/v4/spot/candlesticks"
-        params = {"currency_pair": f"{symbol}_USDT", "interval": gate_interval, "limit": limit + 1}
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if not isinstance(data, list) or len(data) < 10:
-            raise Exception(f"Gate.io no data for {symbol}")
-        rows = data[:-1]  # drop last incomplete candle
-        closes = [float(row[2]) for row in rows]
-        vols   = [float(row[5]) for row in rows]
-        return closes, vols
-    except Exception as e:
-        pass
-
-    raise Exception(f"No data source available for {symbol}")
-    try:
-        url = f"{BINANCE_BASE}/klines"
-        params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit + 1}
-        r = requests.get(url, params=params, timeout=10)
-        if r.status_code == 200:
-            rows = r.json()[:-1]
-            return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
-    except: pass
-
-    # 2. OKX — works from GitHub Actions
-    try:
-        interval_map = {"1h": "1H", "4h": "4H", "1d": "1D"}
-        okx_bar = interval_map.get(interval, "4H")
-        url = "https://www.okx.com/api/v5/market/candles"
-        params = {"instId": f"{symbol}-USDT", "bar": okx_bar, "limit": str(limit + 1)}
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if data.get("code") != "0":
-            raise Exception(f"OKX error: {data.get('msg')}")
-        rows = list(reversed(data["data"]))[:-1]
-        closes = [float(row[4]) for row in rows]
-        vols   = [float(row[7]) for row in rows]
-        return closes, vols
-    except Exception as e:
-        if "OKX error" in str(e):
-            pass  # pair not found on OKX, try KuCoin
-        else:
-            raise
-
-    # 3. KuCoin fallback — for coins not on OKX (e.g. DEXE)
+# 3. KuCoin fallback — for coins not on OKX (e.g. DEXE)
+try:
     interval_map_kc = {"1h": "1hour", "4h": "4hour", "1d": "1day"}
     kc_interval = interval_map_kc.get(interval, "4hour")
     url = "https://api.kucoin.com/api/v1/market/candles"
@@ -270,83 +206,150 @@ def fetch_klines(symbol, interval="4h", limit=100):
     data = r.json()
     if data.get("code") != "200000":
         raise Exception(f"KuCoin error: {data.get('msg')}")
-    # KuCoin: [timestamp, open, close, high, low, volume, turnover] newest first
     rows = list(reversed(data["data"]))[-limit-1:-1]
     closes = [float(row[2]) for row in rows]
-    vols   = [float(row[6]) for row in rows]  # turnover in USDT
+    vols   = [float(row[6]) for row in rows]
     return closes, vols
+except Exception as e:
+    pass  # KuCoin failed, try Gate.io
 
+# 4. Gate.io — last resort for exotic pairs like COS
+try:
+    interval_map_gate = {"1h": "1h", "4h": "4h", "1d": "1d"}
+    gate_interval = interval_map_gate.get(interval, "4h")
+    url = "https://api.gateio.ws/api/v4/spot/candlesticks"
+    params = {"currency_pair": f"{symbol}_USDT", "interval": gate_interval, "limit": limit + 1}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = requests.get(url, params=params, headers=headers, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    if not isinstance(data, list) or len(data) < 10:
+        raise Exception(f"Gate.io no data for {symbol}")
+    rows = data[:-1]  # drop last incomplete candle
+    closes = [float(row[2]) for row in rows]
+    vols   = [float(row[5]) for row in rows]
+    return closes, vols
+except Exception as e:
+    pass
 
+raise Exception(f"No data source available for {symbol}")
+try:
+    url = f"{BINANCE_BASE}/klines"
+    params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit + 1}
+    r = requests.get(url, params=params, timeout=10)
+    if r.status_code == 200:
+        rows = r.json()[:-1]
+        return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
+except: pass
+
+# 2. OKX — works from GitHub Actions
+try:
+    interval_map = {"1h": "1H", "4h": "4H", "1d": "1D"}
+    okx_bar = interval_map.get(interval, "4H")
+    url = "https://www.okx.com/api/v5/market/candles"
+    params = {"instId": f"{symbol}-USDT", "bar": okx_bar, "limit": str(limit + 1)}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = requests.get(url, params=params, headers=headers, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    if data.get("code") != "0":
+        raise Exception(f"OKX error: {data.get('msg')}")
+    rows = list(reversed(data["data"]))[:-1]
+    closes = [float(row[4]) for row in rows]
+    vols   = [float(row[7]) for row in rows]
+    return closes, vols
+except Exception as e:
+    if "OKX error" in str(e):
+        pass  # pair not found on OKX, try KuCoin
+    else:
+        raise
+
+# 3. KuCoin fallback — for coins not on OKX (e.g. DEXE)
+interval_map_kc = {"1h": "1hour", "4h": "4hour", "1d": "1day"}
+kc_interval = interval_map_kc.get(interval, "4hour")
+url = "https://api.kucoin.com/api/v1/market/candles"
+params = {"symbol": f"{symbol}-USDT", "type": kc_interval}
+r = requests.get(url, params=params, timeout=10)
+r.raise_for_status()
+data = r.json()
+if data.get("code") != "200000":
+    raise Exception(f"KuCoin error: {data.get('msg')}")
+# KuCoin: [timestamp, open, close, high, low, volume, turnover] newest first
+rows = list(reversed(data["data"]))[-limit-1:-1]
+closes = [float(row[2]) for row in rows]
+vols   = [float(row[6]) for row in rows]  # turnover in USDT
+return closes, vols
+```
 
 # ============ TELEGRAM ============
 
 def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
-    payload = {"chat_id": TG_CHAT, "text": msg, "parse_mode": "HTML"}
-    try:
-        requests.post(url, json=payload, timeout=10)
-        print(f"  📱 Telegram: {msg[:60]}...")
-    except Exception as e:
-        print(f"  ❌ Telegram error: {e}")
+url = f”https://api.telegram.org/bot{TG_TOKEN}/sendMessage”
+payload = {“chat_id”: TG_CHAT, “text”: msg, “parse_mode”: “HTML”}
+try:
+requests.post(url, json=payload, timeout=10)
+print(f”  📱 Telegram: {msg[:60]}…”)
+except Exception as e:
+print(f”  ❌ Telegram error: {e}”)
 
 # ============ SUPABASE ============
 
 def load_state():
-    url = f"{SUPABASE_URL}/rest/v1/scanner_state?id=eq.default&select=*"
-    r = requests.get(url, headers=SUPA_HEADERS, timeout=10)
-    r.raise_for_status()
-    data = r.json()
-    if not data:
-        return None
-    return data[0]
+url = f”{SUPABASE_URL}/rest/v1/scanner_state?id=eq.default&select=*”
+r = requests.get(url, headers=SUPA_HEADERS, timeout=10)
+r.raise_for_status()
+data = r.json()
+if not data:
+return None
+return data[0]
 
 def save_prev_state(prev_states):
-    """Save previous indicator states to Supabase for cross detection"""
-    url = f"{SUPABASE_URL}/rest/v1/scanner_state?id=eq.default"
-    payload = {"prev_states": json.dumps(prev_states)}
-    requests.patch(url, headers=SUPA_HEADERS, json=payload, timeout=10)
+“”“Save previous indicator states to Supabase for cross detection”””
+url = f”{SUPABASE_URL}/rest/v1/scanner_state?id=eq.default”
+payload = {“prev_states”: json.dumps(prev_states)}
+requests.patch(url, headers=SUPA_HEADERS, json=payload, timeout=10)
 
 def load_prev_state():
-    state = load_state()
-    if state and state.get("prev_states"):
-        try:
-            return json.loads(state["prev_states"])
-        except:
-            return {}
-    return {}
+state = load_state()
+if state and state.get(“prev_states”):
+try:
+return json.loads(state[“prev_states”])
+except:
+return {}
+return {}
 
 # ============ ALERT CONFIG ============
 
 DEFAULT_TRIGGERS = {
-    "rsi_low":    {"on": False, "val": 30},
-    "rsi_high":   {"on": False, "val": 70},
-    "obv_up":     {"on": False},
-    "obv_down":   {"on": False},
-    "spike_solo": {"on": False, "val": 3.0},
-    "spike_green":{"on": False, "val": 3.0},
-    "macd_up":    {"on": False},
-    "macd_down":  {"on": False},
-    "mr":         {"on": False, "val": 35},
-    "ob":         {"on": False, "val": 70},
-    "strong":     {"on": False, "val": 4},
-    "sell":       {"on": False, "val": -4},
+“rsi_low”:    {“on”: False, “val”: 30},
+“rsi_high”:   {“on”: False, “val”: 70},
+“obv_up”:     {“on”: False},
+“obv_down”:   {“on”: False},
+“spike_solo”: {“on”: False, “val”: 3.0},
+“spike_green”:{“on”: False, “val”: 3.0},
+“macd_up”:    {“on”: False},
+“macd_down”:  {“on”: False},
+“mr”:         {“on”: False, “val”: 35},
+“ob”:         {“on”: False, “val”: 70},
+“strong”:     {“on”: False, “val”: 4},
+“sell”:       {“on”: False, “val”: -4},
 }
 
 def is_enabled(coin, trigger_type, global_triggers, coin_triggers):
-    """Check if trigger is enabled globally or per coin"""
-    g = global_triggers.get(trigger_type, {})
-    if isinstance(g, dict) and g.get("on"):
-        return True
-    elif g is True:
-        return True
-    c = coin_triggers.get(coin, {}).get(trigger_type, False)
-    return bool(c)
+“”“Check if trigger is enabled globally or per coin”””
+g = global_triggers.get(trigger_type, {})
+if isinstance(g, dict) and g.get(“on”):
+return True
+elif g is True:
+return True
+c = coin_triggers.get(coin, {}).get(trigger_type, False)
+return bool(c)
 
 def get_val(trigger_type, global_triggers, default):
-    g = global_triggers.get(trigger_type, {})
-    if isinstance(g, dict):
-        return g.get("val", default)
-    return default
+g = global_triggers.get(trigger_type, {})
+if isinstance(g, dict):
+return g.get(“val”, default)
+return default
 
 # ============ COOLDOWN ============
 
@@ -354,293 +357,331 @@ SENT_ALERTS = {}
 COOLDOWN_SECS = 300
 
 def load_sent_alerts():
-    try:
-        state = load_state()
-        if state and state.get("sent_alerts"):
-            data = state["sent_alerts"]
-            if isinstance(data, str):
-                data = json.loads(data)
-            return {k: float(v) for k, v in data.items()}
-    except: pass
-    return {}
+try:
+state = load_state()
+if state and state.get(“sent_alerts”):
+data = state[“sent_alerts”]
+if isinstance(data, str):
+data = json.loads(data)
+return {k: float(v) for k, v in data.items()}
+except: pass
+return {}
 
 def save_sent_alerts():
-    try:
-        url = f"{SUPABASE_URL}/rest/v1/scanner_state?id=eq.default"
-        requests.patch(url, headers=SUPA_HEADERS,
-                      json={"sent_alerts": SENT_ALERTS}, timeout=10)
-    except: pass
+try:
+url = f”{SUPABASE_URL}/rest/v1/scanner_state?id=eq.default”
+requests.patch(url, headers=SUPA_HEADERS,
+json={“sent_alerts”: SENT_ALERTS}, timeout=10)
+except: pass
 
 def can_send(coin, trigger_type):
-    key = f"{coin}_{trigger_type}"
-    last = SENT_ALERTS.get(key, 0)
-    return (time.time() - last) > COOLDOWN_SECS
+key = f”{coin}_{trigger_type}”
+last = SENT_ALERTS.get(key, 0)
+return (time.time() - last) > COOLDOWN_SECS
 
 def mark_sent(coin, trigger_type):
-    SENT_ALERTS[f"{coin}_{trigger_type}"] = time.time()
+SENT_ALERTS[f”{coin}_{trigger_type}”] = time.time()
 
 # ============ MAIN CHECK ============
 
 def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
-    print(f"\n  Checking {coin} ({interval})...")
-    closes, vols = None, None
-    for attempt in range(3):
-        try:
-            closes, vols = fetch_klines(coin, interval, 100)
-            break
-        except Exception as e:
-            if attempt < 2:
-                print(f"  ⚠️ Retry {attempt+2}/3 for {coin}: {e}")
-                time.sleep(2)
-            else:
-                print(f"  ❌ Fetch error for {coin}: {e}")
-                return {}
-    if not closes:
-        return {}
+print(f”\n  Checking {coin} ({interval})…”)
+closes, vols = None, None
+for attempt in range(3):
+try:
+closes, vols = fetch_klines(coin, interval, 100)
+break
+except Exception as e:
+if attempt < 2:
+print(f”  ⚠️ Retry {attempt+2}/3 for {coin}: {e}”)
+time.sleep(2)
+else:
+print(f”  ❌ Fetch error for {coin}: {e}”)
+return {}
+if not closes:
+return {}
 
-    rsi   = calc_rsi(closes)
-    macd  = calc_macd(closes)
-    em    = calc_ema_cross(closes)
-    bb    = calc_bb(closes)
-    vol   = calc_spike(vols, closes)
-    obv   = calc_obv(vols, closes)
-    score = analyze(rsi, macd, em, bb, calc_spike(vols, closes))
-    price = closes[-1]
-    px    = fmt_price(price)
+```
+rsi   = calc_rsi(closes)
+macd  = calc_macd(closes)
+em    = calc_ema_cross(closes)
+bb    = calc_bb(closes)
+vol   = calc_spike(vols, closes)
+obv   = calc_obv(vols, closes)
+score = analyze(rsi, macd, em, bb, calc_spike(vols, closes))
+price = closes[-1]
+px    = fmt_price(price)
 
-    obv_trend  = obv["trend"] if obv else "flat"
-    prev_obv   = prev_states.get(coin, {}).get("obv", "flat")
-    spike_r    = vol["ratio"] if vol else 0
-    macd_dir   = "up" if macd and macd["up"] else "down" if macd and macd["down"] else "flat"
-    prev_macd  = prev_states.get(coin, {}).get("macd", "flat")
+obv_trend  = obv["trend"] if obv else "flat"
+prev_obv   = prev_states.get(coin, {}).get("obv", "flat")
+spike_r    = vol["ratio"] if vol else 0
+macd_dir   = "up" if macd and macd["up"] else "down" if macd and macd["down"] else "flat"
+prev_macd  = prev_states.get(coin, {}).get("macd", "flat")
 
-    rsi_str = f"{rsi:.1f}" if rsi else "N/A"
-    print(f"    RSI={rsi_str} Score={score} OBV={obv_trend} Spike={spike_r:.1f}x MACD={macd_dir}")
+rsi_str = f"{rsi:.1f}" if rsi else "N/A"
+print(f"    RSI={rsi_str} Score={score} OBV={obv_trend} Spike={spike_r:.1f}x MACD={macd_dir}")
 
-    def chk(t): return is_enabled(coin, t, global_triggers, coin_triggers) and can_send(coin, t)
-    def gv(t, d): return get_val(t, global_triggers, d)
+def chk(t): return is_enabled(coin, t, global_triggers, coin_triggers) and can_send(coin, t)
+def gv(t, d): return get_val(t, global_triggers, d)
 
-    # RSI solo — fire whenever condition is true
-    if rsi is not None and rsi < gv("rsi_low", 30) and chk("rsi_low"):
-        mark_sent(coin, "rsi_low")
-        send_telegram(f"📉 <b>RSI BAJO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (oversold ✅)")
+# RSI solo — fire whenever condition is true
+if rsi is not None and rsi < gv("rsi_low", 30) and chk("rsi_low"):
+    mark_sent(coin, "rsi_low")
+    send_telegram(f"📉 <b>RSI BAJO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (oversold ✅)")
 
-    if rsi is not None and rsi > gv("rsi_high", 70) and chk("rsi_high"):
-        mark_sent(coin, "rsi_high")
-        send_telegram(f"📈 <b>RSI ALTO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (overbought ⚠️)")
+if rsi is not None and rsi > gv("rsi_high", 70) and chk("rsi_high"):
+    mark_sent(coin, "rsi_high")
+    send_telegram(f"📈 <b>RSI ALTO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (overbought ⚠️)")
 
-    # OBV — fire whenever condition is true (cooldown prevents spam)
-    if obv_trend == "up" and chk("obv_up"):
-        mark_sent(coin, "obv_up")
-        send_telegram(f"↑ <b>OBV ACUMULANDO</b>\n<b>{coin}/USDT</b> — ${px}\nCompradores entrando silenciosamente")
+# OBV — fire whenever condition is true (cooldown prevents spam)
+if obv_trend == "up" and chk("obv_up"):
+    mark_sent(coin, "obv_up")
+    send_telegram(f"↑ <b>OBV ACUMULANDO</b>\n<b>{coin}/USDT</b> — ${px}\nCompradores entrando silenciosamente")
 
-    if obv_trend == "down" and chk("obv_down"):
-        mark_sent(coin, "obv_down")
-        send_telegram(f"↓ <b>OBV DISTRIBUYENDO</b>\n<b>{coin}/USDT</b> — ${px}\nVendedores saliendo silenciosamente")
+if obv_trend == "down" and chk("obv_down"):
+    mark_sent(coin, "obv_down")
+    send_telegram(f"↓ <b>OBV DISTRIBUYENDO</b>\n<b>{coin}/USDT</b> — ${px}\nVendedores saliendo silenciosamente")
 
-    # Volume Spike solo
-    if spike_r >= gv("spike_solo", 3.0) and chk("spike_solo"):
-        mark_sent(coin, "spike_solo")
-        vroc = vol["vroc"] if vol else 0
-        send_telegram(f"⚡ <b>VOLUME SPIKE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x promedio\nVROC: {vroc:+.0f}%")
+# Volume Spike solo
+if spike_r >= gv("spike_solo", 3.0) and chk("spike_solo"):
+    mark_sent(coin, "spike_solo")
+    vroc = vol["vroc"] if vol else 0
+    send_telegram(f"⚡ <b>VOLUME SPIKE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x promedio\nVROC: {vroc:+.0f}%")
 
-    if spike_r >= gv("spike_green", 3.0) and vol and vol["up"] and chk("spike_green"):
-        mark_sent(coin, "spike_green")
-        send_telegram(f"⚡ <b>VOLUME SPIKE VERDE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x + vela verde 🔥\nCompra masiva detectada")
+if spike_r >= gv("spike_green", 3.0) and vol and vol["up"] and chk("spike_green"):
+    mark_sent(coin, "spike_green")
+    send_telegram(f"⚡ <b>VOLUME SPIKE VERDE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x + vela verde 🔥\nCompra masiva detectada")
 
-    # MACD cross solo (solo cuando cruza)
-    if macd_dir == "up" and chk("macd_up"):
-        mark_sent(coin, "macd_up")
-        send_telegram(f"📊 <b>MACD CRUCE ALCISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó de negativo a positivo\nMomentum cambia a alcista ✅")
+# MACD cross solo (solo cuando cruza)
+if macd_dir == "up" and chk("macd_up"):
+    mark_sent(coin, "macd_up")
+    send_telegram(f"📊 <b>MACD CRUCE ALCISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó de negativo a positivo\nMomentum cambia a alcista ✅")
 
-    if macd_dir == "down" and chk("macd_down"):
-        mark_sent(coin, "macd_down")
-        send_telegram(f"📊 <b>MACD CRUCE BAJISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó de positivo a negativo\nMomentum cambia a bajista ⚠️")
+if macd_dir == "down" and chk("macd_down"):
+    mark_sent(coin, "macd_down")
+    send_telegram(f"📊 <b>MACD CRUCE BAJISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó de positivo a negativo\nMomentum cambia a bajista ⚠️")
 
-    # Combined
-    if rsi is not None and rsi < gv("mr", 35) and obv_trend == "up" and chk("mr"):
-        mark_sent(coin, "mr")
-        send_telegram(f"🔥 <b>MEAN REVERSION</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} ✅  OBV: acumulando ↑\nPuntaje: {score:+d}")
+# Combined
+if rsi is not None and rsi < gv("mr", 35) and obv_trend == "up" and chk("mr"):
+    mark_sent(coin, "mr")
+    send_telegram(f"🔥 <b>MEAN REVERSION</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} ✅  OBV: acumulando ↑\nPuntaje: {score:+d}")
 
-    if rsi is not None and rsi > gv("ob", 70) and obv_trend == "down" and chk("ob"):
-        mark_sent(coin, "ob")
-        send_telegram(f"🚨 <b>OVERBOUGHT COMBO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} ⚠️  OBV: distribuyendo ↓")
+if rsi is not None and rsi > gv("ob", 70) and obv_trend == "down" and chk("ob"):
+    mark_sent(coin, "ob")
+    send_telegram(f"🚨 <b>OVERBOUGHT COMBO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} ⚠️  OBV: distribuyendo ↓")
 
-    if score >= gv("strong", 4) and chk("strong"):
-        mark_sent(coin, "strong")
-        rsi_str = f"{rsi:.1f}" if rsi else "—"
-        send_telegram(f"💎 <b>STRONG BUY</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score:+d}/+5</b>\nRSI: {rsi_str}")
+if score >= gv("strong", 4) and chk("strong"):
+    mark_sent(coin, "strong")
+    rsi_str = f"{rsi:.1f}" if rsi else "—"
+    send_telegram(f"💎 <b>STRONG BUY</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score:+d}/+5</b>\nRSI: {rsi_str}")
 
-    if score <= gv("sell", -4) and chk("sell"):
-        mark_sent(coin, "sell")
-        send_telegram(f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score}/-5</b>")
+if score <= gv("sell", -4) and chk("sell"):
+    mark_sent(coin, "sell")
+    send_telegram(f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score}/-5</b>")
 
-    # ---- Individual indicator alerts per coin ----
-    ct = coin_triggers.get(coin, {})
+# ---- Individual indicator alerts per coin ----
+ct = coin_triggers.get(coin, {})
 
-    def ind_enabled(key): return ct.get(key, {}).get("on", False) if isinstance(ct.get(key), dict) else False
-    def ind_val(key, default): return ct.get(key, {}).get("val", default) if isinstance(ct.get(key), dict) else default
+def ind_cfg(key): return ct.get(key) if isinstance(ct.get(key), dict) else None
+def ind_enabled(key): c=ind_cfg(key); return bool(c.get("on")) if c else False
+def ind_val(key, default): c=ind_cfg(key); return c.get("val", default) if c else default
+def ind_tf(key): c=ind_cfg(key); return c.get("tf", interval) if c else interval
 
-    if ind_enabled("ind_rsi_low") and rsi is not None:
-        threshold = ind_val("ind_rsi_low", 30)
-        if rsi < threshold and can_send(coin, "ind_rsi_low"):
+def fetch_ind(key):
+    """Return (closes, vols) for the TF of this alert. Reuses main fetch if same TF."""
+    tf = ind_tf(key)
+    if tf == interval:
+        return closes, vols
+    try:
+        return fetch_klines(coin, tf, 100)
+    except:
+        return None, None
+
+# RSI low
+if ind_enabled("ind_rsi_low"):
+    threshold = ind_val("ind_rsi_low", 30)
+    tf = ind_tf("ind_rsi_low")
+    c2, v2 = fetch_ind("ind_rsi_low")
+    if c2:
+        rsi2 = calc_rsi(c2)
+        if rsi2 is not None and rsi2 < threshold and can_send(coin, "ind_rsi_low"):
             mark_sent(coin, "ind_rsi_low")
-            send_telegram(f"📉 <b>RSI BAJO — {coin}</b>
-<b>{coin}/USDT</b> — ${px}
-RSI: {rsi:.1f} (menor a {threshold})")
+            send_telegram(f"📉 <b>RSI BAJO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nRSI ({tf}): {rsi2:.1f} (menor a {threshold})")
 
-    if ind_enabled("ind_rsi_high") and rsi is not None:
-        threshold = ind_val("ind_rsi_high", 70)
-        if rsi > threshold and can_send(coin, "ind_rsi_high"):
+# RSI high
+if ind_enabled("ind_rsi_high"):
+    threshold = ind_val("ind_rsi_high", 70)
+    tf = ind_tf("ind_rsi_high")
+    c2, v2 = fetch_ind("ind_rsi_high")
+    if c2:
+        rsi2 = calc_rsi(c2)
+        if rsi2 is not None and rsi2 > threshold and can_send(coin, "ind_rsi_high"):
             mark_sent(coin, "ind_rsi_high")
-            send_telegram(f"📈 <b>RSI ALTO — {coin}</b>
-<b>{coin}/USDT</b> — ${px}
-RSI: {rsi:.1f} (mayor a {threshold})")
+            send_telegram(f"📈 <b>RSI ALTO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nRSI ({tf}): {rsi2:.1f} (mayor a {threshold})")
 
-    if ind_enabled("ind_score_up"):
-        threshold = int(ind_val("ind_score_up", 3))
-        if score >= threshold and can_send(coin, "ind_score_up"):
+# Score up
+if ind_enabled("ind_score_up"):
+    threshold = int(ind_val("ind_score_up", 3))
+    tf = ind_tf("ind_score_up")
+    c2, v2 = fetch_ind("ind_score_up")
+    if c2:
+        sc2 = analyze(calc_rsi(c2), calc_macd(c2), calc_ema_cross(c2), calc_bb(c2), calc_spike(v2, c2))
+        if sc2 >= threshold and can_send(coin, "ind_score_up"):
             mark_sent(coin, "ind_score_up")
-            send_telegram(f"💎 <b>SCORE ALTO — {coin}</b>
-<b>{coin}/USDT</b> — ${px}
-Score: {score:+d} (≥ {threshold})")
+            send_telegram(f"💎 <b>SCORE ALTO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nScore ({tf}): {sc2:+d} (≥ {threshold})")
 
-    if ind_enabled("ind_score_down"):
-        threshold = int(ind_val("ind_score_down", -3))
-        if score <= threshold and can_send(coin, "ind_score_down"):
+# Score down
+if ind_enabled("ind_score_down"):
+    threshold = int(ind_val("ind_score_down", -3))
+    tf = ind_tf("ind_score_down")
+    c2, v2 = fetch_ind("ind_score_down")
+    if c2:
+        sc2 = analyze(calc_rsi(c2), calc_macd(c2), calc_ema_cross(c2), calc_bb(c2), calc_spike(v2, c2))
+        if sc2 <= threshold and can_send(coin, "ind_score_down"):
             mark_sent(coin, "ind_score_down")
-            send_telegram(f"📉 <b>SCORE BAJO — {coin}</b>
-<b>{coin}/USDT</b> — ${px}
-Score: {score:+d} (≤ {threshold})")
+            send_telegram(f"📉 <b>SCORE BAJO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nScore ({tf}): {sc2:+d} (≤ {threshold})")
 
-    if ind_enabled("ind_obv_up"):
-        if obv_trend == "up" and prev_obv != "up" and can_send(coin, "ind_obv_up"):
+# OBV up
+if ind_enabled("ind_obv_up"):
+    tf = ind_tf("ind_obv_up")
+    c2, v2 = fetch_ind("ind_obv_up")
+    if c2:
+        obv2 = calc_obv(v2, c2)
+        obv2_trend = obv2["trend"] if obv2 else "flat"
+        prev_obv2 = prev_states.get(coin, {}).get(f"obv_{tf}", "flat")
+        if obv2_trend == "up" and prev_obv2 != "up" and can_send(coin, "ind_obv_up"):
             mark_sent(coin, "ind_obv_up")
-            send_telegram(f"↑ <b>OBV ACUMULANDO — {coin}</b>
-<b>{coin}/USDT</b> — ${px}
-OBV cambió a tendencia alcista")
+            send_telegram(f"↑ <b>OBV ACUMULANDO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nOBV ({tf}) cambió a tendencia alcista")
 
-    if ind_enabled("ind_obv_down"):
-        if obv_trend == "down" and prev_obv != "down" and can_send(coin, "ind_obv_down"):
+# OBV down
+if ind_enabled("ind_obv_down"):
+    tf = ind_tf("ind_obv_down")
+    c2, v2 = fetch_ind("ind_obv_down")
+    if c2:
+        obv2 = calc_obv(v2, c2)
+        obv2_trend = obv2["trend"] if obv2 else "flat"
+        prev_obv2 = prev_states.get(coin, {}).get(f"obv_{tf}", "flat")
+        if obv2_trend == "down" and prev_obv2 != "down" and can_send(coin, "ind_obv_down"):
             mark_sent(coin, "ind_obv_down")
-            send_telegram(f"↓ <b>OBV DISTRIBUYENDO — {coin}</b>
-<b>{coin}/USDT</b> — ${px}
-OBV cambió a tendencia bajista")
+            send_telegram(f"↓ <b>OBV DISTRIBUYENDO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nOBV ({tf}) cambió a tendencia bajista")
 
-    # Return new state for this coin
-    return {"obv": obv_trend, "macd": macd_dir, "rsi": rsi, "score": score, "price": price}
+# Return new state for this coin
+return {"obv": obv_trend, "macd": macd_dir, "rsi": rsi, "score": score, "price": price}
+```
 
 # ============ RUN ============
 
 def run():
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"\n{'='*50}")
-    print(f"🤖 Scanner Bot — {now}")
-    print(f"{'='*50}")
+now = datetime.now().strftime(”%Y-%m-%d %H:%M:%S”)
+print(f”\n{’=’*50}”)
+print(f”🤖 Scanner Bot — {now}”)
+print(f”{’=’*50}”)
 
-    # Load state from Supabase
-    try:
-        state = load_state()
-    except Exception as e:
-        print(f"❌ Supabase error: {e}")
-        return
+```
+# Load state from Supabase
+try:
+    state = load_state()
+except Exception as e:
+    print(f"❌ Supabase error: {e}")
+    return
 
-    if not state:
-        print("❌ No state found in Supabase. Run the scanner HTML first to set up.")
-        return
+if not state:
+    print("❌ No state found in Supabase. Run the scanner HTML first to set up.")
+    return
 
-    coins = state.get("coins") or []
-    if not coins:
-        print("⚠️  No coins configured. Add coins in the scanner first.")
-        return
+coins = state.get("coins") or []
+if not coins:
+    print("⚠️  No coins configured. Add coins in the scanner first.")
+    return
 
-    # Load sent alerts from Supabase to maintain cooldown across executions
-    global SENT_ALERTS
-    SENT_ALERTS = load_sent_alerts()
-    # Clean old entries (older than 1 hour)
-    now_ts = time.time()
-    SENT_ALERTS = {k: v for k, v in SENT_ALERTS.items() if now_ts - v < 3600}
-    print(f"🕐 Loaded {len(SENT_ALERTS)} cooldown entries")
+# Load sent alerts from Supabase to maintain cooldown across executions
+global SENT_ALERTS
+SENT_ALERTS = load_sent_alerts()
+# Clean old entries (older than 1 hour)
+now_ts = time.time()
+SENT_ALERTS = {k: v for k, v in SENT_ALERTS.items() if now_ts - v < 3600}
+print(f"🕐 Loaded {len(SENT_ALERTS)} cooldown entries")
 
-    timeframe = state.get("timeframe", "4h")
+timeframe = state.get("timeframe", "4h")
 
-    raw_global = state.get("global_triggers") or {}
-    raw_coin   = state.get("coin_triggers") or {}
-    raw_alerts = state.get("alerts") or {}
+raw_global = state.get("global_triggers") or {}
+raw_coin   = state.get("coin_triggers") or {}
+raw_alerts = state.get("alerts") or {}
 
-    if isinstance(raw_global, str):
-        try: raw_global = json.loads(raw_global)
-        except: raw_global = {}
-    if isinstance(raw_coin, str):
-        try: raw_coin = json.loads(raw_coin)
-        except: raw_coin = {}
-    if isinstance(raw_alerts, str):
-        try: raw_alerts = json.loads(raw_alerts)
-        except: raw_alerts = {}
+if isinstance(raw_global, str):
+    try: raw_global = json.loads(raw_global)
+    except: raw_global = {}
+if isinstance(raw_coin, str):
+    try: raw_coin = json.loads(raw_coin)
+    except: raw_coin = {}
+if isinstance(raw_alerts, str):
+    try: raw_alerts = json.loads(raw_alerts)
+    except: raw_alerts = {}
 
-    prev_states = load_prev_state()
+prev_states = load_prev_state()
 
-    print(f"📊 Coins: {coins}")
-    print(f"⏱  Timeframe: {timeframe}")
-    print(f"🔔 Active global triggers: {[k for k,v in raw_global.items() if (v.get('on') if isinstance(v,dict) else v)]}")
-    if raw_alerts:
-        print(f"💰 Price alerts: {list(raw_alerts.keys())}")
+print(f"📊 Coins: {coins}")
+print(f"⏱  Timeframe: {timeframe}")
+print(f"🔔 Active global triggers: {[k for k,v in raw_global.items() if (v.get('on') if isinstance(v,dict) else v)]}")
+if raw_alerts:
+    print(f"💰 Price alerts: {list(raw_alerts.keys())}")
 
-    alerts_triggered = []
-    new_states = {}
+alerts_triggered = []
+new_states = {}
 
-    for coin in coins:
-        new_state = check_coin(coin, timeframe, raw_global, raw_coin, prev_states)
-        if new_state:
-            new_states[coin] = new_state
+for coin in coins:
+    new_state = check_coin(coin, timeframe, raw_global, raw_coin, prev_states)
+    if new_state:
+        new_states[coin] = new_state
 
-        # Check price alerts using real-time price (CoinGecko/OKX/KuCoin)
-        if coin in raw_alerts and new_state:
-            try:
-                current_price = fetch_realtime_price(coin)
-                if current_price is None:
-                    current_price = new_state.get("price")  # fallback to candle price
-                print(f"  💰 {coin} real-time price: ${fmt_price(current_price)}")
-                coin_alerts = raw_alerts[coin]
-                if isinstance(coin_alerts, dict):
-                    coin_alerts = [coin_alerts]
-                for alert in coin_alerts:
-                    target = float(alert.get("target", 0))
-                    direction = alert.get("dir", "")
-                    hit = (direction == "below" and current_price <= target) or \
-                          (direction == "above" and current_price >= target)
-                    alert_key = f"{coin}_price_{direction}_{target}"
-                    if hit and can_send(coin, f"price_{direction}_{target}"):
-                        mark_sent(coin, f"price_{direction}_{target}")
-                        arrow = "↓" if direction == "below" else "↑"
-                        label = "bajó de" if direction == "below" else "subió a"
-                        target_str = alert.get("targetStr", None)
-                        print(f"  💰 Price alert hit: {coin} {arrow} ${fmt_target(target, target_str)}")
-                        send_telegram(
-                            f"💰 <b>ALERTA DE PRECIO</b>\n"
-                            f"<b>{coin}/USDT</b>\n"
-                            f"Precio actual: ${fmt_price(current_price)}\n"
-                            f"{arrow} {label} ${fmt_target(target, target_str)}"
-                        )
-                # Alerts are persistent — never delete them
-            except Exception as e:
-                print(f"  ⚠️ Price alert check error for {coin}: {e}")
+    # Check price alerts using real-time price (CoinGecko/OKX/KuCoin)
+    if coin in raw_alerts and new_state:
+        try:
+            current_price = fetch_realtime_price(coin)
+            if current_price is None:
+                current_price = new_state.get("price")  # fallback to candle price
+            print(f"  💰 {coin} real-time price: ${fmt_price(current_price)}")
+            coin_alerts = raw_alerts[coin]
+            if isinstance(coin_alerts, dict):
+                coin_alerts = [coin_alerts]
+            for alert in coin_alerts:
+                target = float(alert.get("target", 0))
+                direction = alert.get("dir", "")
+                hit = (direction == "below" and current_price <= target) or \
+                      (direction == "above" and current_price >= target)
+                alert_key = f"{coin}_price_{direction}_{target}"
+                if hit and can_send(coin, f"price_{direction}_{target}"):
+                    mark_sent(coin, f"price_{direction}_{target}")
+                    arrow = "↓" if direction == "below" else "↑"
+                    label = "bajó de" if direction == "below" else "subió a"
+                    target_str = alert.get("targetStr", None)
+                    print(f"  💰 Price alert hit: {coin} {arrow} ${fmt_target(target, target_str)}")
+                    send_telegram(
+                        f"💰 <b>ALERTA DE PRECIO</b>\n"
+                        f"<b>{coin}/USDT</b>\n"
+                        f"Precio actual: ${fmt_price(current_price)}\n"
+                        f"{arrow} {label} ${fmt_target(target, target_str)}"
+                    )
+            # Alerts are persistent — never delete them
+        except Exception as e:
+            print(f"  ⚠️ Price alert check error for {coin}: {e}")
 
-        time.sleep(1.0)  # avoid rate limiting
+    time.sleep(1.0)  # avoid rate limiting
 
-    # Price alerts are persistent — no deletion needed
+# Price alerts are persistent — no deletion needed
 
-    # Save sent alerts to Supabase for cooldown persistence
-    save_sent_alerts()
+# Save sent alerts to Supabase for cooldown persistence
+save_sent_alerts()
 
-    # Save new states back to Supabase
-    try:
-        save_prev_state(new_states)
-        print(f"\n✅ States saved to Supabase")
-    except Exception as e:
-        print(f"⚠️  Could not save states: {e}")
+# Save new states back to Supabase
+try:
+    save_prev_state(new_states)
+    print(f"\n✅ States saved to Supabase")
+except Exception as e:
+    print(f"⚠️  Could not save states: {e}")
 
-    print(f"\n✅ Done — checked {len(coins)} coins")
+print(f"\n✅ Done — checked {len(coins)} coins")
+```
 
-if __name__ == "__main__":
-    run()
+if **name** == “**main**”:
+run()

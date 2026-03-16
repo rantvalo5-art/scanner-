@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -229,6 +230,7 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
 .insight-chip.bad{background:#3d1212;border-color:#5a1818;color:#e24b4a}
 .insight-chip.warn{background:#2a1e00;border-color:#4a3800;color:#ef9f27}
 </style>
+
 </head>
 <body>
 <div class="wrap">
@@ -245,6 +247,7 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
   </div>
 
   <!-- =================== SCANNER PAGE =================== -->
+
   <div class="page active" id="page-scanner">
     <div class="mbar" id="mbar"><span style="font-size:12px;color:#4a5260">Cargando mercado...</span></div>
     <div class="controls">
@@ -333,113 +336,118 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
   </div>
 
   <!-- =================== BACKTEST PAGE =================== -->
+
   <div class="page" id="page-backtest">
     <div class="bt-wrap">
 
-      <!-- STRATEGY TABS -->
-      <div style="display:flex;gap:6px;margin-bottom:1rem">
-        <div class="ntab active" id="stab-normal" onclick="setStrategy('normal')">Estrategia Normal</div>
-        <div class="ntab" id="stab-mean" onclick="setStrategy('mean')">Mean Reversion (bajista)</div>
-        <div class="ntab" id="stab-auto" onclick="setStrategy('auto')" style="margin-left:auto;border-color:#4a7c2f;color:#7bc142">⚡ Auto-Test Todo</div>
-      </div>
+```
+  <!-- STRATEGY TABS -->
+  <div style="display:flex;gap:6px;margin-bottom:1rem">
+    <div class="ntab active" id="stab-normal" onclick="setStrategy('normal')">Estrategia Normal</div>
+    <div class="ntab" id="stab-mean" onclick="setStrategy('mean')">Mean Reversion (bajista)</div>
+    <div class="ntab" id="stab-auto" onclick="setStrategy('auto')" style="margin-left:auto;border-color:#4a7c2f;color:#7bc142">⚡ Auto-Test Todo</div>
+  </div>
 
-      <!-- NORMAL STRATEGY CONTROLS -->
-      <div id="ctrl-normal" class="bt-controls">
-        <div class="bt-field"><span class="bt-label">Moneda</span>
-          <select class="bt-select" id="bt-coin">
-            <option>DOGE</option><option>BTC</option><option>ETH</option>
-            <option>SOL</option><option>BNB</option><option>XRP</option>
-            <option>ADA</option><option>PEPE</option><option>AVAX</option><option>LINK</option>
-          </select>
-        </div>
-        <div class="bt-field"><span class="bt-label">Timeframe</span>
-          <select class="bt-select" id="bt-tf">
-            <option value="4h">4H</option><option value="1h">1H</option><option value="1d">1D</option>
-          </select>
-        </div>
-        <div class="bt-field"><span class="bt-label">Señal mínima</span>
-          <select class="bt-select" id="bt-entry">
-            <option value="1">+1 o más</option><option value="2">+2 o más</option>
-            <option value="3">+3 o más</option><option value="4">+4 o más</option>
-          </select>
-        </div>
-        <div class="bt-field"><span class="bt-label">Take profit %</span>
-          <input class="bt-input" id="bt-tp" type="number" value="15" min="1" max="200">
-        </div>
-        <div class="bt-field"><span class="bt-label">Stop loss %</span>
-          <input class="bt-input" id="bt-sl" type="number" value="7" min="1" max="100">
-        </div>
-        <button class="bt-run" id="bt-run-btn" onclick="runBacktest()">▶ Correr</button>
-      </div>
+  <!-- NORMAL STRATEGY CONTROLS -->
+  <div id="ctrl-normal" class="bt-controls">
+    <div class="bt-field"><span class="bt-label">Moneda</span>
+      <select class="bt-select" id="bt-coin">
+        <option>DOGE</option><option>BTC</option><option>ETH</option>
+        <option>SOL</option><option>BNB</option><option>XRP</option>
+        <option>ADA</option><option>PEPE</option><option>AVAX</option><option>LINK</option>
+      </select>
+    </div>
+    <div class="bt-field"><span class="bt-label">Timeframe</span>
+      <select class="bt-select" id="bt-tf">
+        <option value="4h">4H</option><option value="1h">1H</option><option value="1d">1D</option>
+      </select>
+    </div>
+    <div class="bt-field"><span class="bt-label">Señal mínima</span>
+      <select class="bt-select" id="bt-entry">
+        <option value="1">+1 o más</option><option value="2">+2 o más</option>
+        <option value="3">+3 o más</option><option value="4">+4 o más</option>
+      </select>
+    </div>
+    <div class="bt-field"><span class="bt-label">Take profit %</span>
+      <input class="bt-input" id="bt-tp" type="number" value="15" min="1" max="200">
+    </div>
+    <div class="bt-field"><span class="bt-label">Stop loss %</span>
+      <input class="bt-input" id="bt-sl" type="number" value="7" min="1" max="100">
+    </div>
+    <button class="bt-run" id="bt-run-btn" onclick="runBacktest()">▶ Correr</button>
+  </div>
 
-      <!-- MEAN REVERSION CONTROLS -->
-      <div id="ctrl-mean" class="bt-controls" style="display:none">
-        <div class="bt-field"><span class="bt-label">Moneda</span>
-          <select class="bt-select" id="mr-coin">
-            <option>DOGE</option><option>BTC</option><option>ETH</option>
-            <option>SOL</option><option>BNB</option><option>XRP</option>
-            <option>ADA</option><option>PEPE</option><option>AVAX</option><option>LINK</option>
-          </select>
-        </div>
-        <div class="bt-field"><span class="bt-label">Timeframe</span>
-          <select class="bt-select" id="mr-tf">
-            <option value="4h">4H</option><option value="1h">1H</option><option value="1d">1D</option>
-          </select>
-        </div>
-        <div class="bt-field"><span class="bt-label">RSI entrada (bajo)</span>
-          <input class="bt-input" id="mr-rsi-in" type="number" value="28" min="10" max="40">
-        </div>
-        <div class="bt-field"><span class="bt-label">RSI salida (alto)</span>
-          <input class="bt-input" id="mr-rsi-out" type="number" value="48" min="30" max="70">
-        </div>
-        <div class="bt-field"><span class="bt-label">Take profit %</span>
-          <input class="bt-input" id="mr-tp" type="number" value="7" min="1" max="50">
-        </div>
-        <div class="bt-field"><span class="bt-label">Stop loss %</span>
-          <input class="bt-input" id="mr-sl" type="number" value="4" min="1" max="20">
-        </div>
-        <button class="bt-run" onclick="runMeanReversion()">▶ Correr</button>
-      </div>
+  <!-- MEAN REVERSION CONTROLS -->
+  <div id="ctrl-mean" class="bt-controls" style="display:none">
+    <div class="bt-field"><span class="bt-label">Moneda</span>
+      <select class="bt-select" id="mr-coin">
+        <option>DOGE</option><option>BTC</option><option>ETH</option>
+        <option>SOL</option><option>BNB</option><option>XRP</option>
+        <option>ADA</option><option>PEPE</option><option>AVAX</option><option>LINK</option>
+      </select>
+    </div>
+    <div class="bt-field"><span class="bt-label">Timeframe</span>
+      <select class="bt-select" id="mr-tf">
+        <option value="4h">4H</option><option value="1h">1H</option><option value="1d">1D</option>
+      </select>
+    </div>
+    <div class="bt-field"><span class="bt-label">RSI entrada (bajo)</span>
+      <input class="bt-input" id="mr-rsi-in" type="number" value="28" min="10" max="40">
+    </div>
+    <div class="bt-field"><span class="bt-label">RSI salida (alto)</span>
+      <input class="bt-input" id="mr-rsi-out" type="number" value="48" min="30" max="70">
+    </div>
+    <div class="bt-field"><span class="bt-label">Take profit %</span>
+      <input class="bt-input" id="mr-tp" type="number" value="7" min="1" max="50">
+    </div>
+    <div class="bt-field"><span class="bt-label">Stop loss %</span>
+      <input class="bt-input" id="mr-sl" type="number" value="4" min="1" max="20">
+    </div>
+    <button class="bt-run" onclick="runMeanReversion()">▶ Correr</button>
+  </div>
 
-      <!-- AUTO TEST CONTROLS -->
-      <div id="ctrl-auto" class="bt-controls" style="display:none;flex-direction:column;gap:12px">
-        <div style="font-size:13px;color:#7a8290">Corre automáticamente ambas estrategias en todas las monedas y timeframes seleccionados y muestra un resumen comparativo.</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-          <div class="bt-field"><span class="bt-label">Monedas a testear</span>
-            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px" id="auto-coins">
-              <label class="auto-chip"><input type="checkbox" value="BTC" checked> BTC</label>
-              <label class="auto-chip"><input type="checkbox" value="ETH" checked> ETH</label>
-              <label class="auto-chip"><input type="checkbox" value="XRP" checked> XRP</label>
-              <label class="auto-chip"><input type="checkbox" value="DOGE" checked> DOGE</label>
-              <label class="auto-chip"><input type="checkbox" value="SOL"> SOL</label>
-              <label class="auto-chip"><input type="checkbox" value="BNB"> BNB</label>
-              <label class="auto-chip"><input type="checkbox" value="ADA"> ADA</label>
-              <label class="auto-chip"><input type="checkbox" value="AVAX"> AVAX</label>
-              <label class="auto-chip"><input type="checkbox" value="LINK"> LINK</label>
-            </div>
-          </div>
-          <div class="bt-field"><span class="bt-label">Timeframes</span>
-            <div style="display:flex;gap:5px;margin-top:4px">
-              <label class="auto-chip"><input type="checkbox" value="1h"> 1H</label>
-              <label class="auto-chip"><input type="checkbox" value="4h" checked> 4H</label>
-              <label class="auto-chip"><input type="checkbox" value="1d"> 1D</label>
-            </div>
-          </div>
-          <button class="bt-run" id="auto-run-btn" onclick="runAutoTest()">⚡ Correr Todo</button>
-        </div>
-        <div id="auto-progress" style="display:none">
-          <div style="font-size:12px;color:#555e6b;margin-bottom:6px" id="auto-progress-txt">Iniciando...</div>
-          <div style="height:4px;background:#282c35;border-radius:2px;overflow:hidden">
-            <div id="auto-progress-bar" style="height:100%;background:#639922;width:0%;transition:width 0.3s;border-radius:2px"></div>
-          </div>
+  <!-- AUTO TEST CONTROLS -->
+  <div id="ctrl-auto" class="bt-controls" style="display:none;flex-direction:column;gap:12px">
+    <div style="font-size:13px;color:#7a8290">Corre automáticamente ambas estrategias en todas las monedas y timeframes seleccionados y muestra un resumen comparativo.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div class="bt-field"><span class="bt-label">Monedas a testear</span>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px" id="auto-coins">
+          <label class="auto-chip"><input type="checkbox" value="BTC" checked> BTC</label>
+          <label class="auto-chip"><input type="checkbox" value="ETH" checked> ETH</label>
+          <label class="auto-chip"><input type="checkbox" value="XRP" checked> XRP</label>
+          <label class="auto-chip"><input type="checkbox" value="DOGE" checked> DOGE</label>
+          <label class="auto-chip"><input type="checkbox" value="SOL"> SOL</label>
+          <label class="auto-chip"><input type="checkbox" value="BNB"> BNB</label>
+          <label class="auto-chip"><input type="checkbox" value="ADA"> ADA</label>
+          <label class="auto-chip"><input type="checkbox" value="AVAX"> AVAX</label>
+          <label class="auto-chip"><input type="checkbox" value="LINK"> LINK</label>
         </div>
       </div>
-
-      <div id="bt-results"></div>
+      <div class="bt-field"><span class="bt-label">Timeframes</span>
+        <div style="display:flex;gap:5px;margin-top:4px">
+          <label class="auto-chip"><input type="checkbox" value="1h"> 1H</label>
+          <label class="auto-chip"><input type="checkbox" value="4h" checked> 4H</label>
+          <label class="auto-chip"><input type="checkbox" value="1d"> 1D</label>
+        </div>
+      </div>
+      <button class="bt-run" id="auto-run-btn" onclick="runAutoTest()">⚡ Correr Todo</button>
+    </div>
+    <div id="auto-progress" style="display:none">
+      <div style="font-size:12px;color:#555e6b;margin-bottom:6px" id="auto-progress-txt">Iniciando...</div>
+      <div style="height:4px;background:#282c35;border-radius:2px;overflow:hidden">
+        <div id="auto-progress-bar" style="height:100%;background:#639922;width:0%;transition:width 0.3s;border-radius:2px"></div>
+      </div>
     </div>
   </div>
 
+  <div id="bt-results"></div>
+</div>
+```
+
+  </div>
+
   <!-- =================== ALERTS PAGE =================== -->
+
   <div class="page" id="page-alerts">
     <div style="max-width:760px">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap">
@@ -482,15 +490,18 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
         <div style="font-size:11px;color:#4a5260">Tiempo mínimo entre el mismo tipo de alerta para la misma moneda</div>
       </div>
 
-      <!-- PRICE ALERTS -->
-      <div class="bt-controls" style="flex-direction:column;gap:10px;margin-top:12px">
-        <div style="font-size:13px;font-weight:600;color:#7a8290">💰 Alertas de precio activas</div>
-        <div id="price-alerts-list"><div style="font-size:12px;color:#4a5260">Sin alertas de precio activas.</div></div>
-        <div style="font-size:11px;color:#4a5260;padding:8px 10px;background:#1e2128;border-radius:8px;border:1px solid #2e3340">
-          Para agregar: en el Scanner, cada card tiene un campo "Alerta precio..." — escribe el precio y click "+ Alerta"
-        </div>
-      </div>
+```
+  <!-- PRICE ALERTS -->
+  <div class="bt-controls" style="flex-direction:column;gap:10px;margin-top:12px">
+    <div style="font-size:13px;font-weight:600;color:#7a8290">💰 Alertas de precio activas</div>
+    <div id="price-alerts-list"><div style="font-size:12px;color:#4a5260">Sin alertas de precio activas.</div></div>
+    <div style="font-size:11px;color:#4a5260;padding:8px 10px;background:#1e2128;border-radius:8px;border:1px solid #2e3340">
+      Para agregar: en el Scanner, cada card tiene un campo "Alerta precio..." — escribe el precio y click "+ Alerta"
     </div>
+  </div>
+</div>
+```
+
   </div>
 </div>
 
@@ -1606,6 +1617,16 @@ function renderCoinAlerts(){
     const obvUpOn=ct.ind_obv_up&&ct.ind_obv_up.on;
     const obvDownOn=ct.ind_obv_down&&ct.ind_obv_down.on;
 
+    const tfSel=(key,def)=>{
+      const cur=(ct[`ind_${key}`]&&ct[`ind_${key}`].tf)||def||'1h';
+      return`<select id="ind-tf-${coin}-${key}" onchange="saveIndAlert('${coin}','${key}')" style="padding:3px 5px;font-size:11px;border:1px solid #2e3340;border-radius:5px;background:#21252d;color:#9aa0ab;outline:none">
+        <option value="15m"${cur==='15m'?' selected':''}>15m</option>
+        <option value="1h"${cur==='1h'?' selected':''}>1h</option>
+        <option value="4h"${cur==='4h'?' selected':''}>4h</option>
+        <option value="1d"${cur==='1d'?' selected':''}>1d</option>
+      </select>`;
+    };
+
     const indAlerts=`
       <div style="margin-top:8px;padding:8px 10px;background:#1a1d23;border-radius:8px;border:1px solid #252930">
         <div style="font-size:10px;color:#4a5260;margin-bottom:7px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Alertas de indicador para ${coin}</div>
@@ -1615,40 +1636,40 @@ function renderCoinAlerts(){
             <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-rsi_low" onclick="toggleIndAlert('${coin}','rsi_low')">${rsiLowOn?'ON':'OFF'}</div>
             <span style="font-size:12px;color:#c8cdd5">📉 RSI menor a</span>
             <input type="number" id="ind-val-${coin}-rsi_low" value="${(ct.ind_rsi_low&&ct.ind_rsi_low.val)||30}" min="1" max="99" style="width:52px;padding:3px 6px;font-size:12px;border:1px solid #2e3340;border-radius:5px;background:#21252d;color:#e8ecf0;outline:none" onchange="saveIndAlert('${coin}','rsi_low')">
-            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+            ${tfSel('rsi_low','1h')}
           </div>
 
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-rsi_high" onclick="toggleIndAlert('${coin}','rsi_high')">${rsiHighOn?'ON':'OFF'}</div>
             <span style="font-size:12px;color:#c8cdd5">📈 RSI mayor a</span>
             <input type="number" id="ind-val-${coin}-rsi_high" value="${(ct.ind_rsi_high&&ct.ind_rsi_high.val)||70}" min="1" max="99" style="width:52px;padding:3px 6px;font-size:12px;border:1px solid #2e3340;border-radius:5px;background:#21252d;color:#e8ecf0;outline:none" onchange="saveIndAlert('${coin}','rsi_high')">
-            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+            ${tfSel('rsi_high','1h')}
           </div>
 
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-score_up" onclick="toggleIndAlert('${coin}','score_up')">${scoreUpOn?'ON':'OFF'}</div>
-            <span style="font-size:12px;color:#c8cdd5">💎 Score mayor o igual a</span>
+            <span style="font-size:12px;color:#c8cdd5">💎 Score ≥</span>
             <input type="number" id="ind-val-${coin}-score_up" value="${(ct.ind_score_up&&ct.ind_score_up.val)||3}" min="1" max="5" style="width:52px;padding:3px 6px;font-size:12px;border:1px solid #2e3340;border-radius:5px;background:#21252d;color:#e8ecf0;outline:none" onchange="saveIndAlert('${coin}','score_up')">
-            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+            ${tfSel('score_up','1h')}
           </div>
 
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-score_down" onclick="toggleIndAlert('${coin}','score_down')">${scoreDownOn?'ON':'OFF'}</div>
-            <span style="font-size:12px;color:#c8cdd5">📉 Score menor o igual a</span>
+            <span style="font-size:12px;color:#c8cdd5">📉 Score ≤</span>
             <input type="number" id="ind-val-${coin}-score_down" value="${(ct.ind_score_down&&ct.ind_score_down.val)||-3}" min="-5" max="-1" style="width:52px;padding:3px 6px;font-size:12px;border:1px solid #2e3340;border-radius:5px;background:#21252d;color:#e8ecf0;outline:none" onchange="saveIndAlert('${coin}','score_down')">
-            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+            ${tfSel('score_down','1h')}
           </div>
 
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-obv_up" onclick="toggleIndAlert('${coin}','obv_up')">${obvUpOn?'ON':'OFF'}</div>
-            <span style="font-size:12px;color:#c8cdd5">↑ OBV cambia a acumulando</span>
-            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+            <span style="font-size:12px;color:#c8cdd5">↑ OBV acumulando</span>
+            ${tfSel('obv_up','1h')}
           </div>
 
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <div class="al-toggle" style="min-width:36px;height:20px;font-size:10px" id="ind-tog-${coin}-obv_down" onclick="toggleIndAlert('${coin}','obv_down')">${obvDownOn?'ON':'OFF'}</div>
-            <span style="font-size:12px;color:#c8cdd5">↓ OBV cambia a distribuyendo</span>
-            <span style="font-size:11px;color:#4a5260">solo para ${coin}</span>
+            <span style="font-size:12px;color:#c8cdd5">↓ OBV distribuyendo</span>
+            ${tfSel('obv_down','1h')}
           </div>
 
         </div>
@@ -1677,10 +1698,11 @@ function toggleIndAlert(coin,type){
 function saveIndAlert(coin,type){
   if(!coinTriggers[coin])coinTriggers[coin]={};
   const key=`ind_${type}`;
-  const valEl=document.getElementById(`ind-val-${coin}-${type}`);
-  if(!valEl)return;
   if(!coinTriggers[coin][key])coinTriggers[coin][key]={on:false};
-  coinTriggers[coin][key].val=parseFloat(valEl.value);
+  const valEl=document.getElementById(`ind-val-${coin}-${type}`);
+  if(valEl)coinTriggers[coin][key].val=parseFloat(valEl.value);
+  const tfEl=document.getElementById(`ind-tf-${coin}-${type}`);
+  if(tfEl)coinTriggers[coin][key].tf=tfEl.value;
   if(stateLoaded)saveState();
 }
 
@@ -1797,6 +1819,23 @@ async function loadState(){
         const s=data[0];
         if(s.timeframe)document.getElementById('tf').value=s.timeframe;
         if(s.alerts&&typeof s.alerts==='object'){Object.keys(s.alerts).forEach(k=>{alerts[k]=s.alerts[k];});}
+        // Restore global triggers
+        if(s.global_triggers&&typeof s.global_triggers==='object'){
+          Object.keys(s.global_triggers).forEach(k=>{
+            const v=s.global_triggers[k];
+            const on=typeof v==='object'?v.on:v;
+            globalTriggers[k]=!!on;
+            const el=document.getElementById('altog-'+k);
+            if(el){el.textContent=on?'ON':'OFF';el.classList.toggle('on',!!on);}
+            // restore val inputs
+            const valMap={rsi_low:'al-rsi-low-val',rsi_high:'al-rsi-high-val',spike_solo:'al-spike-solo-x',spike_green:'al-spike-green-x',mr:'al-mr-rsi',ob:'al-ob-rsi',strong:'al-strong-score',sell:'al-sell-score'};
+            if(typeof v==='object'&&v.val!==undefined&&valMap[k]){const el2=document.getElementById(valMap[k]);if(el2)el2.value=v.val;}
+          });
+        }
+        // Restore coin triggers (including individual indicator alerts)
+        if(s.coin_triggers&&typeof s.coin_triggers==='object'){
+          Object.keys(s.coin_triggers).forEach(k=>{coinTriggers[k]=s.coin_triggers[k];});
+        }
         if(s.coins&&s.coins.length){
           showToast(`☁️ ${s.coins.length} monedas cargadas desde la nube`);
           s.coins.forEach(coin=>quickAdd(coin));
@@ -1863,5 +1902,6 @@ loadState().then(had=>{
 });
 
 </script>
+
 </body>
 </html>

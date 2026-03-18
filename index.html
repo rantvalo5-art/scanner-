@@ -1971,7 +1971,17 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
     mainEl.innerHTML='<div class="chart-pane-label">MA9 MA21</div>';
     const mc=LW.createChart(mainEl,{...base,width:mainEl.offsetWidth,height:mainH,
       rightPriceScale:{...base.rightPriceScale,scaleMargins:{top:0.06,bottom:0.20}}});
-    const cs=mc.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,wickUpColor:'#26a69a',wickDownColor:'#ef5350'});
+    const lastPrice=closes[closes.length-1];
+    const priceFormat=lastPrice<0.000001?{type:'price',precision:9,minMove:0.000000001}:
+      lastPrice<0.00001?{type:'price',precision:8,minMove:0.00000001}:
+      lastPrice<0.0001?{type:'price',precision:7,minMove:0.0000001}:
+      lastPrice<0.001?{type:'price',precision:6,minMove:0.000001}:
+      lastPrice<0.01?{type:'price',precision:5,minMove:0.00001}:
+      lastPrice<1?{type:'price',precision:4,minMove:0.0001}:
+      lastPrice<100?{type:'price',precision:3,minMove:0.001}:
+      {type:'price',precision:2,minMove:0.01};
+
+    const cs=mc.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,wickUpColor:'#26a69a',wickDownColor:'#ef5350',priceFormat});
     cs.setData(candles);
     const vs=mc.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol'});
     mc.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0},borderVisible:false});

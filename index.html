@@ -2066,7 +2066,15 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
         const ch=LW.createChart(el,{...base,width:el.offsetWidth,height:subH,timeScale:{...base.timeScale,visible:true}});
         let obv=0;
         const od=candles.map((c,i)=>{if(i>0){if(c.close>candles[i-1].close)obv+=vols[i];else if(c.close<candles[i-1].close)obv-=vols[i];}return{time:c.time,value:obv};});
-        const os=ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:true});
+        const os=ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:true,
+          priceFormat:{type:'custom',formatter:v=>{
+            const a=Math.abs(v);
+            const s=v<0?'-':'';
+            if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';
+            if(a>=1e6)return s+(a/1e6).toFixed(2)+'M';
+            if(a>=1e3)return s+(a/1e3).toFixed(1)+'K';
+            return s+a.toFixed(0);
+          }}});
         os.setData(od);
         ch.timeScale().fitContent();synced.push(ch);
       }
@@ -2074,6 +2082,12 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
     // sync all sub-panes with main
     mc.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)synced.forEach(c=>c.timeScale().setVisibleLogicalRange(r));});
     synced.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)mc.timeScale().setVisibleLogicalRange(r);}));
+
+    // Sync price scale width so all panes align vertically
+    const fixedScaleWidth=95;
+    [mc,...synced].forEach(c=>{
+      c.applyOptions({rightPriceScale:{width:fixedScaleWidth}});
+    });
 
     // ── LIVE WEBSOCKET ──
     startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH);

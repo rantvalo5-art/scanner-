@@ -1962,7 +1962,7 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
     const volData=rows.map((r,i)=>({
       time:Math.floor(Number(r[0])/1000),
       value:parseFloat(r[5]||vols[i]||0),
-      color:parseFloat(r[4])>=parseFloat(r[1])?'rgba(38,166,154,0.5)':'rgba(239,83,80,0.5)'
+      color:parseFloat(r[4])>=parseFloat(r[1])?'rgba(26,122,110,0.5)':'rgba(239,83,80,0.5)'
     }));
     const LW=window.LightweightCharts;
     const base={
@@ -1989,11 +1989,11 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       {type:'price',precision:2,minMove:0.01};
 
     const isUp=candles.length>1&&candles[candles.length-1].close>=candles[candles.length-2].close;
-    const priceColor=isUp?'#26a69a':'#ef5350';
+    const priceColor=isUp?'#1a7a6e':'#ef5350';
     const cs=mc.addCandlestickSeries({
-      upColor:'#26a69a',downColor:'#ef5350',
+      upColor:'#1a7a6e',downColor:'#ef5350',
       borderVisible:false,
-      wickUpColor:'#26a69a',wickDownColor:'#ef5350',
+      wickUpColor:'#1a7a6e',wickDownColor:'#ef5350',
       priceFormat,
       lastValueVisible:false,
       priceLineVisible:false,
@@ -2032,7 +2032,7 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
         const ml=e12.map((v,i)=>({time:v.time,value:v.value-e26[i].value}));
         const sl=emaLine(ml,9);
         const hs=ch.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
-        hs.setData(ml.map((v,i)=>{const h=v.value-sl[i].value;return{time:v.time,value:h,color:h>=0?'rgba(38,166,154,0.7)':'rgba(239,83,80,0.7)'};}));
+        hs.setData(ml.map((v,i)=>{const h=v.value-sl[i].value;return{time:v.time,value:h,color:h>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)'};}));
         const ms=ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
         ms.setData(ml);
         const ss=ch.addLineSeries({color:'#ff9800',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
@@ -2052,7 +2052,7 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
         if(rd.length>1){
           const t0=rd[0].time,tN=rd[rd.length-1].time;
           const ob=ch.addLineSeries({color:'rgba(239,83,80,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
-          const os=ch.addLineSeries({color:'rgba(38,166,154,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
+          const os=ch.addLineSeries({color:'rgba(26,122,110,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
           ob.setData([{time:t0,value:70},{time:tN,value:70}]);
           os.setData([{time:t0,value:30},{time:tN,value:30}]);
         }

@@ -2026,8 +2026,12 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       const e12=emaLine(cd,12),e26=emaLine(cd,26);
       const ml=e12.map((v,i)=>({time:v.time,value:v.value-e26[i].value}));
       const sl=emaLine(ml,9);
+      const histData=ml.map((v,i)=>{
+        const h=v.value-sl[i].value;
+        return{time:v.time,value:h,color:h>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)'};
+      });
       seriesRefs.macdHist=ch.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
-      seriesRefs.macdHist.setData(ml.map((v,i)=>{const h=v.value-sl[i].value;return{time:v.time,value:h,color:h>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)';};}));
+      seriesRefs.macdHist.setData(histData);
       seriesRefs.macdLine=ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
       seriesRefs.macdLine.setData(ml);
       seriesRefs.macdSignal=ch.addLineSeries({color:'#ff9800',lineWidth:1,priceLineVisible:false,lastValueVisible:false});

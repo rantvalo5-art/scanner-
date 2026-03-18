@@ -1957,13 +1957,13 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       color:parseFloat(r[4])>=parseFloat(r[1])?'rgba(26,122,110,0.5)':'rgba(239,83,80,0.5)'
     }));
     const LW=window.LightweightCharts;
-    const SCALE_W=85;
+    const SCALE_W=100;
     const base={
       layout:{background:{type:'solid',color:'#131722'},textColor:'#9aa0ab'},
       grid:{vertLines:{color:'#1e2128'},horzLines:{color:'#1e2128'}},
       crosshair:{mode:0,vertLine:{labelBackgroundColor:'#2a2e38'},horzLine:{labelBackgroundColor:'#2a2e38'}},
       leftPriceScale:{visible:false},
-      rightPriceScale:{borderColor:'#2a2e38',autoScale:true,width:SCALE_W},
+      rightPriceScale:{borderColor:'#2a2e38',autoScale:true,width:SCALE_W,minimumWidth:SCALE_W},
       timeScale:{borderColor:'#2a2e38',timeVisible:true,secondsVisible:false,visible:false},
       handleScroll:true,handleScale:true,
     };
@@ -2000,6 +2000,13 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       priceScaleId:'',
       scaleMargins:{top:0.85,bottom:0}});
     vs.setData(volData);
+    // Cap price axis labels to 8 chars max so width stays consistent
+    function makePriceFmt(p){
+      const mag=p?Math.floor(Math.log10(Math.abs(p)||1)):0;
+      const prec=Math.max(0,Math.min(-mag+3,6));
+      return v=>v.toFixed(prec);
+    }
+    mc.applyOptions({localization:{priceFormatter:makePriceFmt(lastPrice)}});
     if(showMA&&closes.length>=21){
       const cd=candles.map(c=>({time:c.time,value:c.close}));
       mc.addLineSeries({color:'#f5a623',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(emaLine(cd,9));

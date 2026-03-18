@@ -2027,7 +2027,7 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
         .setData(ml.map((v,i)=>{const h=v.value-sl[i].value;return{time:v.time,value:h,color:h>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)'};}));
       ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(ml);
       ch.addLineSeries({color:'#ff9800',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(sl);
-      ch.timeScale().fitContent();synced.push(ch);
+      synced.push(ch);
     }
     // RSI
     if(showRSI&&closes.length>=15){
@@ -2046,7 +2046,7 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
         ch.addLineSeries({color:'rgba(239,83,80,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false}).setData([{time:t0,value:70},{time:tN,value:70}]);
         ch.addLineSeries({color:'rgba(26,122,110,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false}).setData([{time:t0,value:30},{time:tN,value:30}]);
       }
-      ch.timeScale().fitContent();synced.push(ch);
+      synced.push(ch);
     }
     // OBV
     if(showOBV){
@@ -2056,11 +2056,16 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       const od=candles.map((c,i)=>{if(i>0){if(c.close>candles[i-1].close)obv+=vols[i];else if(c.close<candles[i-1].close)obv-=vols[i];}return{time:c.time,value:obv};});
       const obvFmt={type:'custom',formatter:v=>{const a=Math.abs(v),s=v<0?'-':'';return a>=1e9?s+(a/1e9).toFixed(1)+'B':a>=1e6?s+(a/1e6).toFixed(1)+'M':a>=1e3?s+(a/1e3).toFixed(0)+'K':s+a.toFixed(0);}};
       ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:true,priceFormat:obvFmt}).setData(od);
-      ch.timeScale().fitContent();synced.push(ch);
+      synced.push(ch);
     }
     // Sync scroll
     mc.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)synced.forEach(c=>c.timeScale().setVisibleLogicalRange(r));});
     synced.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r){mc.timeScale().setVisibleLogicalRange(r);synced.forEach(s=>{if(s!==c)s.timeScale().setVisibleLogicalRange(r);});}}));
+    // Force all panes to match main chart range so right edges align
+    setTimeout(()=>{
+      const r=mc.timeScale().getVisibleLogicalRange();
+      if(r)synced.forEach(c=>c.timeScale().setVisibleLogicalRange(r));
+    },100);
     // Live WS
     startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH);
   }catch(e){

@@ -746,10 +746,11 @@ function fmtPrice(p){
   return p.toFixed(decimals);
 }
 function fmtTarget(p){
-  // Preserve exact precision for alert targets
-  const s=p.toString();
-  if(s.includes('.'))return s;
-  return fmtPrice(p);
+  // Always use exact string representation — never scientific notation
+  if(p===null||p===undefined)return'0';
+  const mag=Math.floor(Math.log10(Math.abs(p)||1));
+  const decimals=Math.max(0,Math.min(-mag+6,10));
+  return p.toFixed(decimals);
 }
 function fmtDate(ts){const d=new Date(ts);return d.toLocaleDateString('es-PY',{month:'short',day:'numeric'});}
 
@@ -1083,7 +1084,7 @@ function renderCard(coin,loading,err){
     const alertListHTML=coinAlerts.map((a,i)=>{
       const arrow=a.dir==='below'?'↓':'↑';
       const cls=a.dir==='below'?'ir':'ib';
-      const tStr=a.targetStr||String(a.target);
+      const tStr=a.targetStr||fmtTarget(a.target);
       return`<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
         <span class="${cls}" style="font-size:10px">${arrow} $${tStr}</span>
         <span onclick="clearAlert('${coin}',${i})" style="font-size:10px;color:#636b78;cursor:pointer;padding:0 3px">×</span>

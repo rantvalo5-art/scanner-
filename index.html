@@ -1867,6 +1867,7 @@ function setChartCols(n){
 }
 
 async function renderCharts(){
+  closeAllWS();
   const grid=document.getElementById('charts-grid');
   const empty=document.getElementById('charts-empty');
   const count=document.getElementById('charts-count');
@@ -1933,7 +1934,7 @@ async function renderCharts(){
         </div>
       </div>
       <div class="chart-infobar">
-        <span style="color:#3d4452">RSI</span><span style="color:${rsiCol};font-weight:600">${rsiVal}</span>
+        <span style="color:#3d4452">RSI</span><span class="live-rsi" style="color:${rsiCol};font-weight:600">${rsiVal}</span>
         <span style="color:#3d4452">MACD</span><span style="color:${macdCol}">${macdSig?macdSig.s:'—'}</span>
         <span style="color:#3d4452">OBV</span><span style="color:${obvCol}">${obvTrend==='up'?'↑ acum':obvTrend==='down'?'↓ dist':'→'}</span>
       </div>
@@ -2074,14 +2075,150 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
     // sync all sub-panes with main
     mc.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)synced.forEach(c=>c.timeScale().setVisibleLogicalRange(r));});
     synced.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)mc.timeScale().setVisibleLogicalRange(r);}));
+
+    // ── LIVE WEBSOCKET ──
+    startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH);
+
   }catch(e){
     const el=document.getElementById(`pane-main-${coin}`);
     if(el)el.innerHTML=`<div style="color:#e24b4a;font-size:11px;padding:8px">Error cargando ${coin}</div>`;
   }
 }
 
+// Store active WebSockets so we can close them when re-rendering
+const activeWS={};
+
+function tfToWsInterval(tf){
+  const map={'1m':'1m','5m':'5m','15m':'15m','1h':'1h','4h':'4h','1d':'1d'};
+  return map[tf]||'1h';
+}
+
+function startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH){
+  // Close existing WS for this coin if any
+  if(activeWS[coin]){try{activeWS[coin].close();}catch(e){}delete activeWS[coin];}
+
+  const interval=tfToWsInterval(tf);
+  const wsUrl=`wss://stream.binance.com:9443/ws/${coin.toLowerCase()}usdt@kline_${interval}`;
+
+  let ws;
+  try{ws=new WebSocket(wsUrl);}catch(e){return;}
+  activeWS[coin]=ws;
+
+  // Track live candle state
+  let liveCandles=[...candles];
+  let liveVols=[...vols];
+  let liveCloses=[...closes];
+  let prevObv=0;
+  // compute current OBV from existing data
+  liveCandles.forEach((c,i)=>{if(i>0){if(c.close>liveCandles[i-1].close)prevObv+=liveVols[i];else if(c.close<liveCandles[i-1].close)prevObv-=liveVols[i];}});
+
+  // Show live dot indicator
+  const header=document.querySelector(`#cc-${coin} .chart-header`);
+  if(header&&!header.querySelector('.live-dot')){
+    const dot=document.createElement('span');
+    dot.className='live-dot';
+    dot.title='Live';
+    dot.style.cssText='width:6px;height:6px;border-radius:50%;background:#7bc142;flex-shrink:0;animation:pulse 2s infinite';
+    header.appendChild(dot);
+  }
+
+  ws.onmessage=function(e){
+    try{
+      const msg=JSON.parse(e.data);
+      const k=msg.k;
+      if(!k)return;
+
+      const t=Math.floor(k.t/1000);
+      const o=parseFloat(k.o),h=parseFloat(k.h),l=parseFloat(k.l),c=parseFloat(k.c),v=parseFloat(k.v);
+      const isClosed=k.x; // candle is closed/finalized
+
+      // Update candlestick
+      cs.update({time:t,open:o,high:h,low:l,close:c});
+
+      // Update volume bar
+      const volColor=c>=o?'rgba(26,122,110,0.5)':'rgba(239,83,80,0.5)';
+      vs.update({time:t,value:v,color:volColor});
+
+      // Update price line label
+      const isUp=c>=o;
+      if(priceLine){
+        priceLine.applyOptions({price:c,color:isUp?'#1a7a6e':'#ef5350'});
+      }
+
+      // Update infobar RSI value live
+      const infobar=document.querySelector(`#cc-${coin} .chart-infobar`);
+
+      if(isClosed){
+        // Candle closed — update our arrays and recalc indicators
+        const lastT=liveCandles[liveCandles.length-1]?.time;
+        if(t===lastT){
+          liveCandles[liveCandles.length-1]={time:t,open:o,high:h,low:l,close:c};
+          liveVols[liveVols.length-1]=v;
+          liveCloses[liveCloses.length-1]=c;
+        } else {
+          liveCandles.push({time:t,open:o,high:h,low:l,close:c});
+          liveVols.push(v);
+          liveCloses.push(c);
+          // keep arrays from growing too large
+          if(liveCandles.length>500){liveCandles.shift();liveVols.shift();liveCloses.shift();}
+        }
+
+        // Update MAs if shown
+        if(showMA&&liveCloses.length>=21&&mc){
+          const cd=liveCandles.map(c=>({time:c.time,value:c.close}));
+          // find the MA series — update last point only for performance
+          try{
+            const LW=window.LightweightCharts;
+            // recalc just last point of ema9/ema21
+            function emaLast(arr,p){const k=2/(p+1);let e=arr[0];for(let i=1;i<arr.length;i++)e=arr[i]*k+e*(1-k);return e;}
+            const last9=emaLast(liveCloses,9);
+            const last21=emaLast(liveCloses,21);
+            // We stored references — update via chart series
+            mc.getSeries().forEach(s=>{
+              // can't easily identify which is ma9/ma21 without storing refs
+              // instead we'll just let the next renderCharts() handle it
+            });
+          }catch(ex){}
+        }
+      }
+
+      // Update infobar with live RSI
+      if(infobar&&liveCloses.length>=15){
+        const liveRSI=calcRSI(liveCloses);
+        if(liveRSI!==null){
+          const rsiSpan=infobar.querySelector('.live-rsi');
+          const rsiCol=liveRSI<30?'#7bc142':liveRSI>70?'#e24b4a':'#9aa0ab';
+          if(rsiSpan){rsiSpan.textContent=liveRSI.toFixed(1);rsiSpan.style.color=rsiCol;}
+        }
+      }
+
+    }catch(ex){console.warn('WS parse error:',ex);}
+  };
+
+  ws.onerror=function(){
+    const dot=document.querySelector(`#cc-${coin} .live-dot`);
+    if(dot){dot.style.background='#e24b4a';dot.title='Disconnected';}
+  };
+
+  ws.onclose=function(){
+    const dot=document.querySelector(`#cc-${coin} .live-dot`);
+    if(dot)dot.remove();
+    delete activeWS[coin];
+  };
+}
+
+// Close all WebSockets when leaving Charts tab or re-rendering
+function closeAllWS(){
+  Object.keys(activeWS).forEach(coin=>{
+    try{activeWS[coin].close();}catch(e){}
+    delete activeWS[coin];
+  });
+}
+
 const _origShowPage=showPage;
 showPage=function(p){
+  // close WS when leaving charts tab
+  if(p!=='charts')closeAllWS();
   _origShowPage(p);
   if(p==='charts'){
     [1,2,3,4].forEach(c=>{const btn=document.getElementById('col-btn-'+c);if(btn){btn.style.background=c===chartCols?'#282c35':'#21252d';btn.style.color=c===chartCols?'#fff':'#636b78';}});

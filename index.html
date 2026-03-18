@@ -249,6 +249,31 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
 .chart-pane div[style*="background-color: rgb(38, 166"] div,
 .chart-pane div[style*="background-color: rgb(239, 83"] div{color:#fff!important;font-weight:600}
 .lw-chart-price-label{background:#1e2128!important;color:#e8ecf0!important;border:1px solid #3d4452!important}
+/* SCREENER */
+.scr-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:10px 14px;background:#21252d;border-radius:10px;border:1px solid #2e3340}
+.scr-run{padding:7px 18px;font-size:13px;font-weight:600;border:1px solid #4a7c2f;border-radius:8px;background:#1a3d12;color:#7bc142;cursor:pointer}
+.scr-run:hover{background:#2d5a18}.scr-run:disabled{opacity:0.5;cursor:not-allowed}
+.scr-stop{padding:7px 14px;font-size:13px;font-weight:600;border:1px solid #7c2f2f;border-radius:8px;background:#3d1212;color:#e24b4a;cursor:pointer;display:none}
+.scr-progress{margin-bottom:10px;display:none}
+.scr-progress-bar{height:4px;background:#282c35;border-radius:2px;overflow:hidden;margin-top:5px}
+.scr-progress-fill{height:100%;background:#639922;border-radius:2px;transition:width 0.2s;width:0%}
+.scr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.scr-card{background:#21252d;border:1px solid #2e3340;border-radius:10px;padding:12px 14px;cursor:pointer;transition:border-color 0.15s,transform 0.1s}
+.scr-card:hover{border-color:#4a5260;transform:translateY(-1px)}
+.scr-card.scr-strong{border-color:#2d5a18;background:#111d0f}
+.scr-card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.scr-name{font-size:14px;font-weight:700;color:#fff}
+.scr-price{font-size:11px;color:#636b78;margin-top:1px}
+.scr-chg{font-size:11px;padding:1px 5px;border-radius:4px;font-weight:600}
+.scr-score{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.scr-signals{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.scr-sig{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
+.scr-sig.on{background:#1a3d12;color:#7bc142}.scr-sig.off{background:#1e2128;color:#3d4452}
+.scr-tfs{display:flex;gap:4px;margin-top:5px}
+.scr-tf{flex:1;text-align:center;padding:3px 4px;border-radius:5px;font-size:10px;font-weight:600}
+.scr-tf.b{background:#1a3d12;color:#7bc142}.scr-tf.r{background:#3d1212;color:#e24b4a}.scr-tf.n{background:#1e2128;color:#555e6b}
+.scr-empty{text-align:center;padding:3rem;color:#3d4452;font-size:13px;grid-column:1/-1;border:1px dashed #1a1a1a;border-radius:12px}
+
 .insight{background:#21252d;border:1px solid #2e3340;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
 .insight-ttl{font-size:12px;color:#555e6b;margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
 .insight-row{display:flex;gap:8px;flex-wrap:wrap}
@@ -267,6 +292,7 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
     </div>
     <div class="nav-left">
       <div class="ntab active" onclick="showPage('scanner')">Scanner</div>
+      <div class="ntab" onclick="showPage('screener')">🔍 Screener</div>
       <div class="ntab" onclick="showPage('charts')">📈 Charts</div>
       <div class="ntab" onclick="showPage('backtest')">Backtesting</div>
       <div class="ntab" onclick="showPage('alerts')" id="nav-alerts">🔔 Alertas</div>
@@ -524,6 +550,42 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
   </div>
 </div>
 
+<div class="page" id="page-screener" style="padding:1rem 1.25rem;width:100%;box-sizing:border-box">
+  <div class="scr-toolbar">
+    <div style="flex:1;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:13px;font-weight:600;color:#fff">Auto Screener</span>
+      <span style="font-size:11px;color:#4a5260">Top 200 USDT · RSI↑ + OBV↑ + Precio↑</span>
+      <span id="scr-found" style="font-size:11px;color:#7bc142;display:none"></span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:11px;color:#4a5260">Timeframe:</span>
+      <select id="scr-tf" style="padding:5px 8px;font-size:12px;border:1px solid #2e3340;border-radius:7px;background:#21252d;color:#e8ecf0;outline:none">
+        <option value="1h">1H</option>
+        <option value="4h">4H</option>
+        <option value="1d">1D</option>
+      </select>
+      <span style="font-size:11px;color:#4a5260">Min score:</span>
+      <select id="scr-min" style="padding:5px 8px;font-size:12px;border:1px solid #2e3340;border-radius:7px;background:#21252d;color:#e8ecf0;outline:none">
+        <option value="2">+2</option>
+        <option value="3" selected>+3</option>
+        <option value="4">+4</option>
+        <option value="5">+5</option>
+      </select>
+      <button class="scr-run" id="scr-run-btn" onclick="runScreener()">▶ Escanear</button>
+      <button class="scr-stop" id="scr-stop-btn" onclick="stopScreener()">■ Detener</button>
+    </div>
+  </div>
+  <div class="scr-progress" id="scr-progress">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#4a5260">
+      <span id="scr-prog-txt">Iniciando...</span>
+      <span id="scr-prog-pct">0%</span>
+    </div>
+    <div class="scr-progress-bar"><div class="scr-progress-fill" id="scr-prog-fill"></div></div>
+  </div>
+  <div class="scr-grid" id="scr-grid">
+    <div class="scr-empty">Presioná ▶ Escanear para buscar oportunidades en las top 200 monedas</div>
+  </div>
+</div>
 
 <div class="page" id="page-charts" style="padding:0.5rem 1.25rem 1.25rem;width:100%;box-sizing:border-box">
     <div class="charts-toolbar">
@@ -1580,6 +1642,7 @@ function showPage(id){
   else if(id==='backtest')document.querySelectorAll('.ntab').forEach(t=>{if(t.textContent.toLowerCase().includes('back'))t.classList.add('active');});
   else if(id==='alerts'){document.getElementById('nav-alerts').classList.add('active');renderCoinAlerts();renderPriceAlerts();}
   else if(id==='charts')document.querySelectorAll('.ntab').forEach(t=>{if(t.textContent.includes('Charts'))t.classList.add('active');});
+  else if(id==='screener')document.querySelectorAll('.ntab').forEach(t=>{if(t.textContent.includes('Screener'))t.classList.add('active');});
 }
 
 function showToast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
@@ -1828,6 +1891,165 @@ function checkTriggers(coin,d){
 
   checkAlert(coin,d.price);
 }
+/* ============ AUTO SCREENER ============ */
+let scrRunning=false;
+let scrAbort=false;
+
+// Fetch top 200 USDT pairs by volume from Binance
+async function getTop200(){
+  const r=await fetch('https://api.binance.com/api/v3/ticker/24hr');
+  const data=await r.json();
+  return data
+    .filter(t=>t.symbol.endsWith('USDT')&&!t.symbol.includes('UP')&&!t.symbol.includes('DOWN')&&!t.symbol.includes('BULL')&&!t.symbol.includes('BEAR'))
+    .sort((a,b)=>parseFloat(b.quoteVolume)-parseFloat(a.quoteVolume))
+    .slice(0,200)
+    .map(t=>({
+      symbol:t.symbol.replace('USDT',''),
+      price:parseFloat(t.lastPrice),
+      chg:parseFloat(t.priceChangePercent),
+      volume:parseFloat(t.quoteVolume)
+    }));
+}
+
+async function screenCoin(coin,tf){
+  try{
+    const{closes,vols}=await fetchTF(coin,tf,100);
+    if(closes.length<30)return null;
+
+    const rsi=calcRSI(closes);
+    const prevRsi=calcRSI(closes.slice(0,-1));
+    const obv=calcOBV(vols,closes);
+    const macd=calcMACD(closes);
+    const em=calcEMA(closes);
+    const bb=calcBB(closes);
+    const vol=calcVol(vols,closes);
+    const{score}=analyze(rsi,macd,em,bb,vol);
+
+    // Core criteria: RSI rising + OBV accumulating + price rising
+    const rsiRising=rsi!==null&&prevRsi!==null&&rsi>prevRsi;
+    const obvUp=obv&&obv.trend==='up';
+    const priceUp=closes[closes.length-1]>closes[closes.length-2];
+    const matchesCriteria=rsiRising&&obvUp&&priceUp;
+
+    return{score,rsi,obv:obv?obv.trend:'flat',rsiRising,obvUp,priceUp,matchesCriteria,macd,em};
+  }catch(e){return null;}
+}
+
+function stopScreener(){
+  scrAbort=true;
+}
+
+async function runScreener(){
+  if(scrRunning)return;
+  scrRunning=true;scrAbort=false;
+
+  const runBtn=document.getElementById('scr-run-btn');
+  const stopBtn=document.getElementById('scr-stop-btn');
+  const prog=document.getElementById('scr-progress');
+  const progTxt=document.getElementById('scr-prog-txt');
+  const progPct=document.getElementById('scr-prog-pct');
+  const progFill=document.getElementById('scr-prog-fill');
+  const grid=document.getElementById('scr-grid');
+  const found=document.getElementById('scr-found');
+  const tf=document.getElementById('scr-tf').value;
+  const minScore=parseInt(document.getElementById('scr-min').value);
+
+  runBtn.disabled=true;stopBtn.style.display='block';
+  prog.style.display='block';found.style.display='none';
+  grid.innerHTML='<div class="scr-empty">Escaneando...</div>';
+
+  let results=[];
+  let processed=0;
+
+  try{
+    progTxt.textContent='Obteniendo top 200 monedas...';
+    const coins=await getTop200();
+    const total=coins.length;
+
+    // Process in batches of 5 to avoid rate limiting
+    const BATCH=5;
+    for(let i=0;i<total;i+=BATCH){
+      if(scrAbort)break;
+      const batch=coins.slice(i,i+BATCH);
+      const batchResults=await Promise.all(batch.map(async c=>{
+        const res=await screenCoin(c.symbol,tf);
+        return{...c,result:res};
+      }));
+
+      batchResults.forEach(c=>{
+        if(c.result&&c.result.matchesCriteria&&c.result.score>=minScore){
+          results.push(c);
+        }
+      });
+
+      processed+=batch.length;
+      const pct=Math.round(processed/total*100);
+      progFill.style.width=pct+'%';
+      progPct.textContent=pct+'%';
+      progTxt.textContent=`Analizando ${processed}/${total} — ${results.length} encontradas`;
+
+      // Re-render results as they come in
+      renderScreenerResults(results,minScore);
+      await sleep(200); // small delay between batches
+    }
+
+  }catch(e){
+    grid.innerHTML=`<div class="scr-empty" style="color:#e24b4a">Error: ${e.message}</div>`;
+  }
+
+  // Final render
+  renderScreenerResults(results,minScore);
+  if(results.length>0){
+    found.textContent=`✓ ${results.length} oportunidades encontradas`;
+    found.style.display='inline';
+  }
+
+  prog.style.display='none';
+  runBtn.disabled=false;stopBtn.style.display='none';
+  scrRunning=false;scrAbort=false;
+}
+
+function renderScreenerResults(results,minScore){
+  const grid=document.getElementById('scr-grid');
+  if(!results.length){
+    grid.innerHTML='<div class="scr-empty">Sin resultados aún — esperando datos...</div>';
+    return;
+  }
+  // Sort by score desc
+  const sorted=[...results].sort((a,b)=>(b.result.score||0)-(a.result.score||0));
+
+  grid.innerHTML=sorted.map(c=>{
+    const r=c.result;
+    const score=r.score;
+    const scoreBg=score>=4?'#1a3d12':score>=2?'#1a3215':'#2e2600';
+    const scoreColor=score>=4?'#7bc142':score>=2?'#5a9e30':'#ef9f27';
+    const chgCls=c.chg>=0?'up':'down';
+    const chgStr=(c.chg>=0?'+':'')+c.chg.toFixed(2)+'%';
+
+    const sigs=[
+      {label:'RSI↑',on:r.rsiRising,val:r.rsi?r.rsi.toFixed(0):''},
+      {label:'OBV↑',on:r.obvUp},
+      {label:'Precio↑',on:r.priceUp},
+      {label:'EMA↑',on:r.em&&r.em.bullish},
+      {label:'MACD+',on:r.macd&&r.macd.h>0&&r.macd.h>r.macd.ph},
+    ];
+
+    const sigHtml=sigs.map(s=>`<span class="scr-sig ${s.on?'on':'off'}">${s.label}${s.val?' '+s.val:''}</span>`).join('');
+
+    return`<div class="scr-card ${score>=3?'scr-strong':''}" onclick="quickAdd('${c.symbol}');showPage('scanner');showToast('${c.symbol} agregado al Scanner')">
+      <div class="scr-card-top">
+        <div>
+          <div class="scr-name">${c.symbol}<span style="color:#3d4452;font-size:10px;font-weight:400">/USDT</span></div>
+          <div class="scr-price">$${fmtPrice(c.price)} <span class="scr-chg ${chgCls}">${chgStr}</span></div>
+        </div>
+        <div class="scr-score" style="background:${scoreBg};color:${scoreColor}">${score>0?'+':''}${score}</div>
+      </div>
+      <div class="scr-signals">${sigHtml}</div>
+      <div style="font-size:10px;color:#3d4452;margin-top:2px">Click para agregar al Scanner</div>
+    </div>`;
+  }).join('');
+}
+
 const SUPA_HEADERS={'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};
 
 /* ============ CHARTS PAGE — Lightweight Charts ============ */

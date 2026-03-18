@@ -2058,14 +2058,21 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:true,priceFormat:obvFmt}).setData(od);
       synced.push(ch);
     }
-    // Sync scroll
-    mc.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)synced.forEach(c=>c.timeScale().setVisibleLogicalRange(r));});
-    synced.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r){mc.timeScale().setVisibleLogicalRange(r);synced.forEach(s=>{if(s!==c)s.timeScale().setVisibleLogicalRange(r);});}}));
-    // Force all panes to match main chart range so right edges align
+    // Sync scroll — use time-based range so RSI aligns even with fewer points
+    const syncRange=r=>{if(r)synced.forEach(c=>{try{c.timeScale().setVisibleLogicalRange(r);}catch(e){}});};
+    mc.timeScale().subscribeVisibleLogicalRangeChange(syncRange);
+    synced.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{
+      if(!r)return;
+      try{mc.timeScale().setVisibleLogicalRange(r);}catch(e){}
+      synced.forEach(s=>{if(s!==c)try{s.timeScale().setVisibleLogicalRange(r);}catch(e){};});
+    }));
+    // After all data loaded, sync all to main chart's time range
     setTimeout(()=>{
-      const r=mc.timeScale().getVisibleLogicalRange();
-      if(r)synced.forEach(c=>c.timeScale().setVisibleLogicalRange(r));
-    },100);
+      try{
+        const tr=mc.timeScale().getVisibleRange();
+        if(tr)synced.forEach(c=>{try{c.timeScale().setVisibleRange(tr);}catch(e){}});
+      }catch(e){}
+    },200);
     // Live WS
     startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH);
   }catch(e){

@@ -1565,6 +1565,7 @@ function showPage(id){
   if(id==='scanner')document.querySelectorAll('.ntab').forEach(t=>{if(t.textContent.toLowerCase().includes('scan'))t.classList.add('active');});
   else if(id==='backtest')document.querySelectorAll('.ntab').forEach(t=>{if(t.textContent.toLowerCase().includes('back'))t.classList.add('active');});
   else if(id==='alerts'){document.getElementById('nav-alerts').classList.add('active');renderCoinAlerts();renderPriceAlerts();}
+  else if(id==='charts')document.querySelectorAll('.ntab').forEach(t=>{if(t.textContent.includes('Charts'))t.classList.add('active');});
 }
 
 function showToast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
@@ -1856,7 +1857,16 @@ async function renderCharts(){
   if(!grid)return;
   const loaded=coins.filter(c=>cdata[c]);
   if(count)count.textContent=loaded.length+' moneda'+(loaded.length!==1?'s':'');
-  if(!loaded.length){grid.innerHTML='';if(empty)empty.style.display='block';return;}
+  if(!loaded.length){
+    grid.innerHTML='';
+    if(empty){
+      empty.style.display='block';
+      empty.textContent=coins.length?'Esperando que carguen los datos del Scanner...':'Agregá monedas en el Scanner primero';
+    }
+    // if coins exist but cdata not ready yet, retry in 2s
+    if(coins.length&&!loaded.length)setTimeout(renderCharts,2000);
+    return;
+  }
   if(empty)empty.style.display='none';
   grid.className='charts-grid'+(chartCols===1?' cols-1':chartCols===3?' cols-3':chartCols===4?' cols-4':'');
 

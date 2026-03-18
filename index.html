@@ -245,6 +245,10 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
 
 /* CHARTS PAGE full width */
 #page-charts{width:100%;box-sizing:border-box;}
+/* Lightweight Charts — dark price labels */
+.chart-pane div[style*="background-color: rgb(38, 166"] div,
+.chart-pane div[style*="background-color: rgb(239, 83"] div{color:#fff!important;font-weight:600}
+.lw-chart-price-label{background:#1e2128!important;color:#e8ecf0!important;border:1px solid #3d4452!important}
 .insight{background:#21252d;border:1px solid #2e3340;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
 .insight-ttl{font-size:12px;color:#555e6b;margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
 .insight-row{display:flex;gap:8px;flex-wrap:wrap}
@@ -1961,9 +1965,12 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       color:parseFloat(r[4])>=parseFloat(r[1])?'rgba(38,166,154,0.5)':'rgba(239,83,80,0.5)'
     }));
     const LW=window.LightweightCharts;
-    const base={layout:{background:{type:'solid',color:'#131722'},textColor:'#636b78'},
-      grid:{vertLines:{color:'#1e2128'},horzLines:{color:'#1e2128'}},crosshair:{mode:1},
-      rightPriceScale:{borderColor:'#2a2e38'},timeScale:{borderColor:'#2a2e38',timeVisible:true,secondsVisible:false},
+    const base={
+      layout:{background:{type:'solid',color:'#131722'},textColor:'#9aa0ab'},
+      grid:{vertLines:{color:'#1e2128'},horzLines:{color:'#1e2128'}},
+      crosshair:{mode:1,vertLine:{labelBackgroundColor:'#2a2e38'},horzLine:{labelBackgroundColor:'#2a2e38'}},
+      rightPriceScale:{borderColor:'#2a2e38'},
+      timeScale:{borderColor:'#2a2e38',timeVisible:true,secondsVisible:false},
       handleScroll:true,handleScale:true};
 
     const mainEl=document.getElementById(`pane-main-${coin}`);
@@ -1981,7 +1988,18 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       lastPrice<100?{type:'price',precision:3,minMove:0.001}:
       {type:'price',precision:2,minMove:0.01};
 
-    const cs=mc.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,wickUpColor:'#26a69a',wickDownColor:'#ef5350',priceFormat});
+    const isUp=candles.length>1&&candles[candles.length-1].close>=candles[candles.length-2].close;
+    const cs=mc.addCandlestickSeries({
+      upColor:'#26a69a',downColor:'#ef5350',
+      borderVisible:false,
+      wickUpColor:'#26a69a',wickDownColor:'#ef5350',
+      priceFormat,
+      lastValueVisible:true,
+      priceLineVisible:true,
+      priceLineColor:isUp?'#26a69a':'#ef5350',
+      priceLineWidth:1,
+      priceLineStyle:2,
+    });
     cs.setData(candles);
     const vs=mc.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol'});
     mc.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0},borderVisible:false});

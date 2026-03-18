@@ -1976,8 +1976,7 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
     const mainEl=document.getElementById(`pane-main-${coin}`);
     if(!mainEl)return;
     mainEl.innerHTML='<div class="chart-pane-label">MA9 MA21</div>';
-    const mc=LW.createChart(mainEl,{...base,width:mainEl.offsetWidth,height:mainH,
-      rightPriceScale:{...base.rightPriceScale,scaleMargins:{top:0.06,bottom:0.20}}});
+    const mc=LW.createChart(mainEl,{...base,width:mainEl.offsetWidth,height:mainH});
     const lastPrice=closes[closes.length-1];
     // Calculate precision based on significant digits — always show 4 significant figures
     function getPriceFormat(p){
@@ -2000,6 +1999,7 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       priceLineVisible:false,
     });
     cs.setData(candles);
+    mc.priceScale('right').applyOptions({scaleMargins:{top:0.05,bottom:0.18}});
 
     // Custom last price label with correct color
     const lastCandle=candles[candles.length-1];
@@ -2083,6 +2083,16 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
     // sync all sub-panes with main
     mc.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)synced.forEach(c=>c.timeScale().setVisibleLogicalRange(r));});
     synced.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)mc.timeScale().setVisibleLogicalRange(r);}));
+
+    // Force identical price scale width across all panes after LWC renders
+    setTimeout(()=>{
+      // Read the actual rendered width from main chart's time scale
+      const allCharts=[mc,...synced];
+      // Apply same fixed width to all — use 90px which fits most label formats
+      allCharts.forEach(c=>{
+        try{c.applyOptions({rightPriceScale:{width:90}});}catch(ex){}
+      });
+    },50);
 
     // ── LIVE WEBSOCKET ──
     startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH);

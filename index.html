@@ -1989,19 +1989,28 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       {type:'price',precision:2,minMove:0.01};
 
     const isUp=candles.length>1&&candles[candles.length-1].close>=candles[candles.length-2].close;
+    const priceColor=isUp?'#26a69a':'#ef5350';
     const cs=mc.addCandlestickSeries({
       upColor:'#26a69a',downColor:'#ef5350',
       borderVisible:false,
       wickUpColor:'#26a69a',wickDownColor:'#ef5350',
       priceFormat,
-      lastValueVisible:true,
-      priceLineVisible:true,
-      priceLineColor:isUp?'#26a69a':'#ef5350',
-      priceLineWidth:1,
-      priceLineStyle:2,
+      lastValueVisible:false,
+      priceLineVisible:false,
     });
     cs.setData(candles);
-    const vs=mc.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol'});
+
+    // Custom last price label with correct color
+    const lastCandle=candles[candles.length-1];
+    const priceLine=cs.createPriceLine({
+      price:lastCandle.close,
+      color:priceColor,
+      lineWidth:1,
+      lineStyle:2,
+      axisLabelVisible:true,
+      title:'',
+    });
+    const vs=mc.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol',lastValueVisible:false,priceLineVisible:false});
     mc.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0},borderVisible:false});
     vs.setData(volData);
     if(showMA&&closes.length>=21){

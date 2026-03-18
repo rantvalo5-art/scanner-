@@ -2007,10 +2007,13 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       return v=>v.toFixed(prec);
     }
     mc.applyOptions({localization:{priceFormatter:makePriceFmt(lastPrice)}});
+    const seriesRefs={};
     if(showMA&&closes.length>=21){
       const cd=candles.map(c=>({time:c.time,value:c.close}));
-      mc.addLineSeries({color:'#f5a623',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(emaLine(cd,9));
-      mc.addLineSeries({color:'#7b61ff',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(emaLine(cd,21));
+      seriesRefs.ma9=mc.addLineSeries({color:'#f5a623',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+      seriesRefs.ma21=mc.addLineSeries({color:'#7b61ff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+      seriesRefs.ma9.setData(emaLine(cd,9));
+      seriesRefs.ma21.setData(emaLine(cd,21));
     }
     mc.timeScale().fitContent();
     const synced=[];
@@ -2023,10 +2026,12 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       const e12=emaLine(cd,12),e26=emaLine(cd,26);
       const ml=e12.map((v,i)=>({time:v.time,value:v.value-e26[i].value}));
       const sl=emaLine(ml,9);
-      ch.addHistogramSeries({priceLineVisible:false,lastValueVisible:false})
-        .setData(ml.map((v,i)=>{const h=v.value-sl[i].value;return{time:v.time,value:h,color:h>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)'};}));
-      ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(ml);
-      ch.addLineSeries({color:'#ff9800',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(sl);
+      seriesRefs.macdHist=ch.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
+      seriesRefs.macdHist.setData(ml.map((v,i)=>{const h=v.value-sl[i].value;return{time:v.time,value:h,color:h>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)';};}));
+      seriesRefs.macdLine=ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+      seriesRefs.macdLine.setData(ml);
+      seriesRefs.macdSignal=ch.addLineSeries({color:'#ff9800',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+      seriesRefs.macdSignal.setData(sl);
       synced.push(ch);
     }
     // RSI
@@ -2041,13 +2046,11 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
         if(rv!==null&&firstRSI===null)firstRSI=rv;
         if(rv!==null)rd.push({time:candles[i].time,value:rv});
       }
-      // Pad all candles before RSI starts with firstRSI value so all panes have same length
       const rsiTimes=new Set(rd.map(r=>r.time));
-      const padded=candles
-        .filter(c=>!rsiTimes.has(c.time))
-        .map(c=>({time:c.time,value:firstRSI||50}));
+      const padded=candles.filter(c=>!rsiTimes.has(c.time)).map(c=>({time:c.time,value:firstRSI||50}));
       const rdFull=[...padded,...rd].sort((a,b)=>a.time-b.time);
-      ch.addLineSeries({color:'#9c27b0',lineWidth:1,priceLineVisible:false,lastValueVisible:true}).setData(rdFull);
+      seriesRefs.rsiLine=ch.addLineSeries({color:'#9c27b0',lineWidth:1,priceLineVisible:false,lastValueVisible:true});
+      seriesRefs.rsiLine.setData(rdFull);
       if(rdFull.length>1){
         const t0=rdFull[0].time,tN=rdFull[rdFull.length-1].time;
         ch.addLineSeries({color:'rgba(239,83,80,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false}).setData([{time:t0,value:70},{time:tN,value:70}]);
@@ -2062,10 +2065,11 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       let obv=0;
       const od=candles.map((c,i)=>{if(i>0){if(c.close>candles[i-1].close)obv+=vols[i];else if(c.close<candles[i-1].close)obv-=vols[i];}return{time:c.time,value:obv};});
       const obvFmt={type:'custom',formatter:v=>{const a=Math.abs(v),s=v<0?'-':'';return a>=1e9?s+(a/1e9).toFixed(1)+'B':a>=1e6?s+(a/1e6).toFixed(1)+'M':a>=1e3?s+(a/1e3).toFixed(0)+'K':s+a.toFixed(0);}};
-      ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:true,priceFormat:obvFmt}).setData(od);
+      seriesRefs.obvLine=ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:true,priceFormat:obvFmt});
+      seriesRefs.obvLine.setData(od);
       synced.push(ch);
     }
-    // Sync scroll — use time-based range so RSI aligns even with fewer points
+    // Sync scroll
     const syncRange=r=>{if(r)synced.forEach(c=>{try{c.timeScale().setVisibleLogicalRange(r);}catch(e){}});};
     mc.timeScale().subscribeVisibleLogicalRangeChange(syncRange);
     synced.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{
@@ -2073,17 +2077,12 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       try{mc.timeScale().setVisibleLogicalRange(r);}catch(e){}
       synced.forEach(s=>{if(s!==c)try{s.timeScale().setVisibleLogicalRange(r);}catch(e){};});
     }));
-    // After all data loaded, sync all to main chart's time range
     setTimeout(()=>{
-      try{
-        const tr=mc.timeScale().getVisibleRange();
-        if(tr)synced.forEach(c=>{try{c.timeScale().setVisibleRange(tr);}catch(e){}});
-      }catch(e){}
-      // Also scroll all sub-panes to end to ensure right alignment
+      try{const tr=mc.timeScale().getVisibleRange();if(tr)synced.forEach(c=>{try{c.timeScale().setVisibleRange(tr);}catch(e){}});}catch(e){}
       synced.forEach(c=>{try{c.timeScale().scrollToRealTime();}catch(e){}});
     },200);
     // Live WS
-    startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH);
+    startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH,seriesRefs);
   }catch(e){
     const el=document.getElementById(`body-${coin}`);
     if(el)el.innerHTML=`<div style="color:#e24b4a;font-size:11px;padding:8px">Error: ${e.message}</div>`;
@@ -2098,118 +2097,114 @@ function tfToWsInterval(tf){
   return map[tf]||'1h';
 }
 
-function startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH){
-  // Close existing WS for this coin if any
+function startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH,seriesRefs){
   if(activeWS[coin]){try{activeWS[coin].close();}catch(e){}delete activeWS[coin];}
 
   const interval=tfToWsInterval(tf);
   const wsUrl=`wss://stream.binance.com:9443/ws/${coin.toLowerCase()}usdt@kline_${interval}`;
-
   let ws;
   try{ws=new WebSocket(wsUrl);}catch(e){return;}
   activeWS[coin]=ws;
 
-  // Track live candle state
   let liveCandles=[...candles];
   let liveVols=[...vols];
   let liveCloses=[...closes];
-  let prevObv=0;
-  // compute current OBV from existing data
-  liveCandles.forEach((c,i)=>{if(i>0){if(c.close>liveCandles[i-1].close)prevObv+=liveVols[i];else if(c.close<liveCandles[i-1].close)prevObv-=liveVols[i];}});
 
-  // Show live dot indicator
+  // compute starting OBV
+  let liveOBV=0;
+  liveCandles.forEach((c,i)=>{if(i>0){if(c.close>liveCandles[i-1].close)liveOBV+=liveVols[i];else if(c.close<liveCandles[i-1].close)liveOBV-=liveVols[i];}});
+
+  // show live dot
   const header=document.querySelector(`#cc-${coin} .chart-header`);
   if(header&&!header.querySelector('.live-dot')){
     const dot=document.createElement('span');
-    dot.className='live-dot';
-    dot.title='Live';
+    dot.className='live-dot';dot.title='Live';
     dot.style.cssText='width:6px;height:6px;border-radius:50%;background:#7bc142;flex-shrink:0;animation:pulse 2s infinite';
     header.appendChild(dot);
   }
 
+  // EMA calculator (incremental — fast)
+  function emaLast(arr,p){const k=2/(p+1);let e=arr[0];for(let i=1;i<arr.length;i++)e=arr[i]*k+e*(1-k);return e;}
+
   ws.onmessage=function(e){
     try{
       const msg=JSON.parse(e.data);
-      const k=msg.k;
-      if(!k)return;
-
+      const k=msg.k;if(!k)return;
       const t=Math.floor(k.t/1000);
       const o=parseFloat(k.o),h=parseFloat(k.h),l=parseFloat(k.l),c=parseFloat(k.c),v=parseFloat(k.v);
-      const isClosed=k.x; // candle is closed/finalized
+      const isClosed=k.x;
 
-      // Update candlestick
+      // ── Update live arrays ──
+      const lastT=liveCandles[liveCandles.length-1]?.time;
+      if(t===lastT){
+        liveCandles[liveCandles.length-1]={time:t,open:o,high:h,low:l,close:c};
+        liveVols[liveVols.length-1]=v;
+        liveCloses[liveCloses.length-1]=c;
+      } else if(isClosed){
+        liveCandles.push({time:t,open:o,high:h,low:l,close:c});
+        liveVols.push(v);liveCloses.push(c);
+        if(liveCandles.length>500){liveCandles.shift();liveVols.shift();liveCloses.shift();}
+        // recalc OBV for new candle
+        if(c>liveCandles[liveCandles.length-2]?.close)liveOBV+=v;
+        else if(c<liveCandles[liveCandles.length-2]?.close)liveOBV-=v;
+      }
+
+      // ── Candles ──
       cs.update({time:t,open:o,high:h,low:l,close:c});
+      vs.update({time:t,value:v,color:c>=o?'rgba(26,122,110,0.5)':'rgba(239,83,80,0.5)'});
+      if(priceLine)priceLine.applyOptions({price:c,color:c>=o?'#1a7a6e':'#ef5350'});
 
-      // Update volume bar
-      const volColor=c>=o?'rgba(26,122,110,0.5)':'rgba(239,83,80,0.5)';
-      vs.update({time:t,value:v,color:volColor});
-
-      // Update price line label
-      const isUp=c>=o;
-      if(priceLine){
-        priceLine.applyOptions({price:c,color:isUp?'#1a7a6e':'#ef5350'});
+      // ── MA ──
+      if(showMA&&seriesRefs.ma9&&seriesRefs.ma21&&liveCloses.length>=21){
+        const v9=emaLast(liveCloses,9);
+        const v21=emaLast(liveCloses,21);
+        seriesRefs.ma9.update({time:t,value:v9});
+        seriesRefs.ma21.update({time:t,value:v21});
       }
 
-      // Update infobar RSI value live
-      const infobar=document.querySelector(`#cc-${coin} .chart-infobar`);
-
-      if(isClosed){
-        // Candle closed — update our arrays and recalc indicators
-        const lastT=liveCandles[liveCandles.length-1]?.time;
-        if(t===lastT){
-          liveCandles[liveCandles.length-1]={time:t,open:o,high:h,low:l,close:c};
-          liveVols[liveVols.length-1]=v;
-          liveCloses[liveCloses.length-1]=c;
-        } else {
-          liveCandles.push({time:t,open:o,high:h,low:l,close:c});
-          liveVols.push(v);
-          liveCloses.push(c);
-          // keep arrays from growing too large
-          if(liveCandles.length>500){liveCandles.shift();liveVols.shift();liveCloses.shift();}
-        }
-
-        // Update MAs if shown
-        if(showMA&&liveCloses.length>=21&&mc){
-          const cd=liveCandles.map(c=>({time:c.time,value:c.close}));
-          // find the MA series — update last point only for performance
-          try{
-            const LW=window.LightweightCharts;
-            // recalc just last point of ema9/ema21
-            function emaLast(arr,p){const k=2/(p+1);let e=arr[0];for(let i=1;i<arr.length;i++)e=arr[i]*k+e*(1-k);return e;}
-            const last9=emaLast(liveCloses,9);
-            const last21=emaLast(liveCloses,21);
-            // We stored references — update via chart series
-            mc.getSeries().forEach(s=>{
-              // can't easily identify which is ma9/ma21 without storing refs
-              // instead we'll just let the next renderCharts() handle it
-            });
-          }catch(ex){}
-        }
+      // ── MACD (per tick) ──
+      if(showMACD&&seriesRefs.macdHist&&seriesRefs.macdLine&&seriesRefs.macdSignal&&liveCloses.length>=26){
+        const e12=emaLast(liveCloses,12);
+        const e26=emaLast(liveCloses,26);
+        const macdVal=e12-e26;
+        // signal = EMA9 of MACD line — approximate with last values
+        const macdArr=liveCandles.map((_,i)=>{
+          if(i<25)return 0;
+          const sl=liveCloses.slice(0,i+1);
+          return emaLast(sl,12)-emaLast(sl,26);
+        });
+        const signalVal=emaLast(macdArr.slice(-20),9);
+        const histVal=macdVal-signalVal;
+        seriesRefs.macdLine.update({time:t,value:macdVal});
+        seriesRefs.macdSignal.update({time:t,value:signalVal});
+        seriesRefs.macdHist.update({time:t,value:histVal,color:histVal>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)'});
       }
 
-      // Update infobar with live RSI
-      if(infobar&&liveCloses.length>=15){
+      // ── RSI (per tick) ──
+      if(showRSI&&seriesRefs.rsiLine&&liveCloses.length>=15){
         const liveRSI=calcRSI(liveCloses);
         if(liveRSI!==null){
-          const rsiSpan=infobar.querySelector('.live-rsi');
+          seriesRefs.rsiLine.update({time:t,value:liveRSI});
+          // update infobar
+          const infobar=document.querySelector(`#cc-${coin} .chart-infobar`);
+          const rsiSpan=infobar?.querySelector('.live-rsi');
           const rsiCol=liveRSI<30?'#7bc142':liveRSI>70?'#e24b4a':'#9aa0ab';
           if(rsiSpan){rsiSpan.textContent=liveRSI.toFixed(1);rsiSpan.style.color=rsiCol;}
         }
       }
 
-    }catch(ex){console.warn('WS parse error:',ex);}
+      // ── OBV (per tick — approximate current candle) ──
+      if(showOBV&&seriesRefs.obvLine){
+        const tickObv=liveOBV+(c>o?v:c<o?-v:0);
+        const obvFmtV=tickObv;
+        seriesRefs.obvLine.update({time:t,value:tickObv});
+      }
+
+    }catch(ex){console.warn('WS:',ex);}
   };
 
-  ws.onerror=function(){
-    const dot=document.querySelector(`#cc-${coin} .live-dot`);
-    if(dot){dot.style.background='#e24b4a';dot.title='Disconnected';}
-  };
-
-  ws.onclose=function(){
-    const dot=document.querySelector(`#cc-${coin} .live-dot`);
-    if(dot)dot.remove();
-    delete activeWS[coin];
-  };
+  ws.onerror=()=>{const d=document.querySelector(`#cc-${coin} .live-dot`);if(d){d.style.background='#e24b4a';d.title='Disconnected';}};
+  ws.onclose=()=>{const d=document.querySelector(`#cc-${coin} .live-dot`);if(d)d.remove();delete activeWS[coin];};
 }
 
 // Close all WebSockets when leaving Charts tab or re-rendering

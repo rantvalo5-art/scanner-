@@ -1996,8 +1996,9 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
     cs.setData(candles);
     mc.priceScale('right').applyOptions({scaleMargins:{top:0.05,bottom:0.18}});
     const priceLine=cs.createPriceLine({price:candles[candles.length-1].close,color:priceColor,lineWidth:1,lineStyle:2,axisLabelVisible:true,title:''});
-    const vs=mc.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol',lastValueVisible:false,priceLineVisible:false});
-    mc.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0},borderVisible:false,visible:false});
+    const vs=mc.addHistogramSeries({lastValueVisible:false,priceLineVisible:false,
+      priceScaleId:'right'});
+    vs.priceScale().applyOptions({scaleMargins:{top:0.85,bottom:0}});
     vs.setData(volData);
     if(showMA&&closes.length>=21){
       const cd=candles.map(c=>({time:c.time,value:c.close}));

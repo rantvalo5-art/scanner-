@@ -210,6 +210,7 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
 .al-name{font-size:13px;font-weight:500;color:#c8cdd5;margin-bottom:4px}
 .al-desc{font-size:12px;color:#555e6b;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .al-inp{width:46px;padding:2px 6px;font-size:12px;border:1px solid #333;border-radius:5px;background:#1e2128;color:#c8cdd5;outline:none;text-align:center}
+.al-tf-sel{padding:2px 5px;font-size:11px;border:1px solid #333;border-radius:5px;background:#1e2128;color:#c8cdd5;outline:none;cursor:pointer}
 .al-inp:focus{border-color:#555e6b}
 .coin-al-row{display:flex;gap:8px;align-items:center;padding:8px 10px;background:#1e2128;border-radius:8px;margin-bottom:6px;flex-wrap:wrap}
 .coin-al-name{font-size:12px;font-weight:600;color:#fff;min-width:50px}
@@ -505,18 +506,37 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
       </div>
       <div class="bt-controls" style="flex-direction:column;gap:11px">
         <div style="font-size:13px;font-weight:600;color:#7a8290">Triggers globales — aplican a TODAS las monedas</div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('rsi_low')" id="altog-rsi_low">OFF</div><div class="al-info"><div class="al-name">📉 RSI Bajo</div><div class="al-desc">RSI baja de <input class="al-inp" id="al-rsi-low-val" value="30" type="number" min="10" max="50"> (oversold — solo)</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('rsi_high')" id="altog-rsi_high">OFF</div><div class="al-info"><div class="al-name">📈 RSI Alto</div><div class="al-desc">RSI sube de <input class="al-inp" id="al-rsi-high-val" value="70" type="number" min="60" max="95"> (overbought — solo)</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('obv_up')" id="altog-obv_up">OFF</div><div class="al-info"><div class="al-name">↑ OBV Acumulando</div><div class="al-desc">OBV cambia a tendencia alcista (compradores entrando — solo)</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('obv_down')" id="altog-obv_down">OFF</div><div class="al-info"><div class="al-name">↓ OBV Distribuyendo</div><div class="al-desc">OBV cambia a tendencia bajista (vendedores saliendo — solo)</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('spike_solo')" id="altog-spike_solo">OFF</div><div class="al-info"><div class="al-name">⚡ Volume Spike</div><div class="al-desc">Spike mayor a <input class="al-inp" id="al-spike-solo-x" value="3" type="number" min="1.5" max="20" step="0.5">x promedio (cualquier dirección)</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('spike_green')" id="altog-spike_green">OFF</div><div class="al-info"><div class="al-name">⚡ Volume Spike Verde</div><div class="al-desc">Spike mayor a <input class="al-inp" id="al-spike-green-x" value="3" type="number" min="1.5" max="20" step="0.5">x + vela verde (compra masiva)</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('macd_up')" id="altog-macd_up">OFF</div><div class="al-info"><div class="al-name">📊 MACD Cruce Alcista</div><div class="al-desc">Histograma MACD cruza de negativo a positivo (momentum cambia a alcista)</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('macd_down')" id="altog-macd_down">OFF</div><div class="al-info"><div class="al-name">📊 MACD Cruce Bajista</div><div class="al-desc">Histograma MACD cruza de positivo a negativo (momentum cambia a bajista)</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('mr')" id="altog-mr">OFF</div><div class="al-info"><div class="al-name">🔥 Mean Reversion</div><div class="al-desc">RSI &lt; <input class="al-inp" id="al-mr-rsi" value="35" type="number" min="10" max="50"> + OBV acumulando (combinado)</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('ob')" id="altog-ob">OFF</div><div class="al-info"><div class="al-name">🚨 Overbought Combo</div><div class="al-desc">RSI &gt; <input class="al-inp" id="al-ob-rsi" value="70" type="number" min="60" max="90"> + OBV distribuyendo (combinado)</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('strong')" id="altog-strong">OFF</div><div class="al-info"><div class="al-name">💎 Strong Buy</div><div class="al-desc">Puntaje total llega a <input class="al-inp" id="al-strong-score" value="4" type="number" min="2" max="5"> o más</div></div></div>
-        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('sell')" id="altog-sell">OFF</div><div class="al-info"><div class="al-name">📉 Strong Sell</div><div class="al-desc">Puntaje total llega a <input class="al-inp" id="al-sell-score" value="-4" type="number" min="-5" max="-2"> o menos</div></div></div>
+        <div style="font-size:11px;color:#4a5260;margin-top:-4px">Cada alerta corre en su propio timeframe, independiente del Scanner</div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('rsi_low')" id="altog-rsi_low">OFF</div><div class="al-info"><div class="al-name">📉 RSI Bajo</div><div class="al-desc">RSI baja de <input class="al-inp" id="al-rsi-low-val" value="30" type="number" min="10" max="50"> en <select class="al-tf-sel" id="al-tf-rsi_low"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('rsi_high')" id="altog-rsi_high">OFF</div><div class="al-info"><div class="al-name">📈 RSI Alto</div><div class="al-desc">RSI sube de <input class="al-inp" id="al-rsi-high-val" value="70" type="number" min="60" max="95"> en <select class="al-tf-sel" id="al-tf-rsi_high"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('rsi_rising')" id="altog-rsi_rising">OFF</div><div class="al-info"><div class="al-name">📈 RSI Subiendo</div><div class="al-desc">RSI sube más de <input class="al-inp" id="al-rsi-rising-pts" value="3" type="number" min="1" max="30"> puntos en <input class="al-inp" id="al-rsi-rising-bars" value="3" type="number" min="1" max="20"> velas en <select class="al-tf-sel" id="al-tf-rsi_rising"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('rsi_cross30')" id="altog-rsi_cross30">OFF</div><div class="al-info"><div class="al-name">🚀 RSI Cruzó 30 ↑</div><div class="al-desc">RSI cruza 30 hacia arriba (salida de oversold) en <select class="al-tf-sel" id="al-tf-rsi_cross30"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('rsi_cross50')" id="altog-rsi_cross50">OFF</div><div class="al-info"><div class="al-name">💪 RSI Cruzó 50 ↑</div><div class="al-desc">RSI cruza 50 hacia arriba (confirmación de momentum) en <select class="al-tf-sel" id="al-tf-rsi_cross50"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('obv_up')" id="altog-obv_up">OFF</div><div class="al-info"><div class="al-name">↑ OBV Acumulando</div><div class="al-desc">OBV cambia a tendencia alcista en <select class="al-tf-sel" id="al-tf-obv_up"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('obv_down')" id="altog-obv_down">OFF</div><div class="al-info"><div class="al-name">↓ OBV Distribuyendo</div><div class="al-desc">OBV cambia a tendencia bajista en <select class="al-tf-sel" id="al-tf-obv_down"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('spike_solo')" id="altog-spike_solo">OFF</div><div class="al-info"><div class="al-name">⚡ Volume Spike</div><div class="al-desc">Spike mayor a <input class="al-inp" id="al-spike-solo-x" value="3" type="number" min="1.5" max="20" step="0.5">x promedio en <select class="al-tf-sel" id="al-tf-spike_solo"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('spike_green')" id="altog-spike_green">OFF</div><div class="al-info"><div class="al-name">⚡ Volume Spike Verde</div><div class="al-desc">Spike mayor a <input class="al-inp" id="al-spike-green-x" value="3" type="number" min="1.5" max="20" step="0.5">x + vela verde en <select class="al-tf-sel" id="al-tf-spike_green"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('macd_up')" id="altog-macd_up">OFF</div><div class="al-info"><div class="al-name">📊 MACD Cruce Alcista</div><div class="al-desc">Histograma MACD cruza de negativo a positivo en <select class="al-tf-sel" id="al-tf-macd_up"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('macd_down')" id="altog-macd_down">OFF</div><div class="al-info"><div class="al-name">📊 MACD Cruce Bajista</div><div class="al-desc">Histograma MACD cruza de positivo a negativo en <select class="al-tf-sel" id="al-tf-macd_down"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('mr')" id="altog-mr">OFF</div><div class="al-info"><div class="al-name">🔥 Mean Reversion</div><div class="al-desc">RSI &lt; <input class="al-inp" id="al-mr-rsi" value="35" type="number" min="10" max="50"> + OBV acumulando en <select class="al-tf-sel" id="al-tf-mr"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('ob')" id="altog-ob">OFF</div><div class="al-info"><div class="al-name">🚨 Overbought Combo</div><div class="al-desc">RSI &gt; <input class="al-inp" id="al-ob-rsi" value="70" type="number" min="60" max="90"> + OBV distribuyendo en <select class="al-tf-sel" id="al-tf-ob"><option>1h</option><option>4h</option><option>1d</option><option>15m</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('strong')" id="altog-strong">OFF</div><div class="al-info"><div class="al-name">💎 Strong Buy</div><div class="al-desc">Puntaje total llega a <input class="al-inp" id="al-strong-score" value="4" type="number" min="2" max="5"> o más en <select class="al-tf-sel" id="al-tf-strong"><option>1h</option><option>4h</option><option>1d</option></select></div></div></div>
+
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('sell')" id="altog-sell">OFF</div><div class="al-info"><div class="al-name">📉 Strong Sell</div><div class="al-desc">Puntaje total llega a <input class="al-inp" id="al-sell-score" value="-4" type="number" min="-5" max="-2"> o menos en <select class="al-tf-sel" id="al-tf-sell"><option>1h</option><option>4h</option><option>1d</option></select></div></div></div>
       </div>
       <div class="bt-controls" style="flex-direction:column;gap:10px;margin-top:12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -926,6 +946,8 @@ async function loadCoin(coin){
     history_[coin].unshift({time:new Date().toLocaleTimeString('es-PY'),score});
     if(history_[coin].length>10)history_[coin].pop();
     renderCard(coin,false,false);applyFilter();
+    // Run alert triggers async — uses its own TF per alert
+    checkTriggers(coin,cdata[coin]);
   }catch(e){renderCard(coin,false,true);}
 }
 
@@ -1844,60 +1866,143 @@ async function sendTelegram(msg){
   }catch(e){}
 }
 
-function getCooldown(){return parseInt(document.getElementById('al-cooldown')?document.getElementById('al-cooldown').value:300000);}
+function getAlertTF(type){
+  const el=document.getElementById('al-tf-'+type);
+  return el?el.value:(document.getElementById('tf')?document.getElementById('tf').value:'1h');
+}
 
-function checkTriggers(coin,d){
+// Cache for per-TF data per coin to avoid re-fetching within same refresh cycle
+const alertDataCache={};
+const ALERT_CACHE_TTL=60000; // 1 minute
+
+async function getAlertData(coin,tf){
+  const k=`${coin}_${tf}`;
+  const now=Date.now();
+  if(alertDataCache[k]&&(now-alertDataCache[k].ts)<ALERT_CACHE_TTL)return alertDataCache[k].data;
+  try{
+    const d=await fetchTF(coin,tf,60);
+    const closes=d.closes,vols=d.vols;
+    const rsi=calcRSI(closes);
+    const prevRsi=calcRSI(closes.slice(0,-1));
+    const rsi3=calcRSI(closes.slice(0,-3)); // RSI 3 bars ago
+    const rsi5=calcRSI(closes.slice(0,-5)); // RSI 5 bars ago
+    const macd=calcMACD(closes);
+    const obv=calcOBV(vols,closes);
+    const em=calcEMA(closes);
+    const bb=calcBB(closes);
+    const vol=calcVol(vols,closes);
+    const spike=calcVolSpike(vols,closes);
+    const{score}=analyze(rsi,macd,em,bb,vol);
+    const data={rsi,prevRsi,rsi3,rsi5,macd,obv,em,bb,vol,spike,score,
+      closes,vols,price:closes[closes.length-1]};
+    alertDataCache[k]={ts:now,data};
+    return data;
+  }catch(e){return null;}
+}
+
+async function checkTriggers(coin,d){
   const now=Date.now();
   const cooldown=getCooldown();
   const key=(type)=>`${coin}_${type}`;
   const canSend=(type)=>isEnabled(coin,type)&&(!sentAlerts[key(type)]||(now-sentAlerts[key(type)])>cooldown);
   const mark=(type)=>{sentAlerts[key(type)]=now;};
 
-  const rsi=d.rsiVal;
-  const obv=d.obv?d.obv.trend:'flat';
-  const prevObv=d.obv?d.obv.prevTrend||'flat':'flat';
-  const spike=d.spike?d.spike.ratio:0;
-  const score=d.score;
+  // Helper to send alert
+  const fire=(type,msg,toast,toastType)=>{mark(type);sendTelegram(msg);showToast(toast,toastType||'warn');};
+
+  // ── Fetch data per alert TF ──
+  // Group alerts by TF to minimize fetches
+  const tfGroups={};
+  const allTypes=['rsi_low','rsi_high','rsi_rising','rsi_cross30','rsi_cross50',
+    'obv_up','obv_down','spike_solo','spike_green','macd_up','macd_down','mr','ob','strong','sell'];
+  allTypes.forEach(t=>{
+    if(!isEnabled(coin,t))return;
+    const tf=getAlertTF(t);
+    if(!tfGroups[tf])tfGroups[tf]=[];
+    tfGroups[tf].push(t);
+  });
+
   const px=fmtPrice(d.price);
-  const macdH=d.sigs?d.sigs.find(s=>s.l==='MACD'):null;
-  const macdUp=macdH&&macdH.t==='b';
-  const macdDown=macdH&&macdH.t==='r';
-  const prevMacd=d.prevMacdDir||null;
 
-  const rsiLow=parseFloat(document.getElementById('al-rsi-low-val')?document.getElementById('al-rsi-low-val').value:30);
-  const rsiHigh=parseFloat(document.getElementById('al-rsi-high-val')?document.getElementById('al-rsi-high-val').value:70);
-  const spikeSoloX=parseFloat(document.getElementById('al-spike-solo-x')?document.getElementById('al-spike-solo-x').value:3);
-  const spikeGreenX=parseFloat(document.getElementById('al-spike-green-x')?document.getElementById('al-spike-green-x').value:3);
-  const mrRSI=parseFloat(document.getElementById('al-mr-rsi')?document.getElementById('al-mr-rsi').value:35);
-  const obRSI=parseFloat(document.getElementById('al-ob-rsi')?document.getElementById('al-ob-rsi').value:70);
-  const strongScore=parseInt(document.getElementById('al-strong-score')?document.getElementById('al-strong-score').value:4);
-  const sellScore=parseInt(document.getElementById('al-sell-score')?document.getElementById('al-sell-score').value:-4);
+  for(const [tf,types] of Object.entries(tfGroups)){
+    const ad=await getAlertData(coin,tf);
+    if(!ad)continue;
 
-  // RSI solo
-  if(rsi!==null&&rsi<rsiLow&&canSend('rsi_low')){mark('rsi_low');sendTelegram(`📉 <b>RSI BAJO</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (oversold ✅)`);showToast(`📱 ${coin} RSI bajo ${rsi.toFixed(1)}`,'warn');}
-  if(rsi!==null&&rsi>rsiHigh&&canSend('rsi_high')){mark('rsi_high');sendTelegram(`📈 <b>RSI ALTO</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (overbought ⚠️)`);showToast(`📱 ${coin} RSI alto ${rsi.toFixed(1)}`,'warn');}
+    const rsi=ad.rsi,prevRsi=ad.prevRsi,rsi3=ad.rsi3,rsi5=ad.rsi5;
+    const obv=ad.obv?ad.obv.trend:'flat';
+    const prevObv=ad.obv?ad.obv.prevTrend||'flat':'flat';
+    const spike=ad.spike?ad.spike.ratio:0;
+    const score=ad.score;
+    const macdH=ad.macd;
+    const macdUp=macdH&&macdH.h>0&&macdH.ph<=0;
+    const macdDown=macdH&&macdH.h<0&&macdH.ph>=0;
 
-  // OBV solo
-  if(obv==='up'&&prevObv!=='up'&&canSend('obv_up')){mark('obv_up');sendTelegram(`↑ <b>OBV ACUMULANDO</b>\n<b>${coin}/USDT</b> — $${px}\nOBV cambió a tendencia alcista\nCompradores entrando silenciosamente`);showToast(`📱 ${coin} OBV acumulando`,'warn');}
-  if(obv==='down'&&prevObv!=='down'&&canSend('obv_down')){mark('obv_down');sendTelegram(`↓ <b>OBV DISTRIBUYENDO</b>\n<b>${coin}/USDT</b> — $${px}\nOBV cambió a tendencia bajista\nVendedores saliendo silenciosamente`);showToast(`📱 ${coin} OBV distribuyendo`,'err');}
+    // RSI slope metrics
+    const risingPts=parseFloat(document.getElementById('al-rsi-rising-pts')?.value||3);
+    const risingBars=parseInt(document.getElementById('al-rsi-rising-bars')?.value||3);
+    const rsiRef=risingBars<=3?rsi3:rsi5;
+    const rsiSlope=rsi!==null&&rsiRef!==null?rsi-rsiRef:null;
 
-  // Volume Spike solo
-  if(spike>=spikeSoloX&&canSend('spike_solo')){mark('spike_solo');sendTelegram(`⚡ <b>VOLUME SPIKE</b>\n<b>${coin}/USDT</b> — $${px}\nSpike: ${spike.toFixed(1)}x promedio\nVROC: ${d.spike?d.spike.vroc>=0?'+':''+(d.spike.vroc||0).toFixed(0):0}%`);showToast(`📱 ${coin} Spike ${spike.toFixed(1)}x`,'warn');}
-  if(spike>=spikeGreenX&&d.spike&&d.spike.up&&canSend('spike_green')){mark('spike_green');sendTelegram(`⚡ <b>VOLUME SPIKE VERDE</b>\n<b>${coin}/USDT</b> — $${px}\nSpike: ${spike.toFixed(1)}x + vela verde 🔥\nCompra masiva detectada`);showToast(`📱 ${coin} Spike verde ${spike.toFixed(1)}x`,'warn');}
+    for(const type of types){
+      if(!canSend(type))continue;
+      const rsiLow=parseFloat(document.getElementById('al-rsi-low-val')?.value||30);
+      const rsiHigh=parseFloat(document.getElementById('al-rsi-high-val')?.value||70);
+      const spikeSoloX=parseFloat(document.getElementById('al-spike-solo-x')?.value||3);
+      const spikeGreenX=parseFloat(document.getElementById('al-spike-green-x')?.value||3);
+      const mrRSI=parseFloat(document.getElementById('al-mr-rsi')?.value||35);
+      const obRSI=parseFloat(document.getElementById('al-ob-rsi')?.value||70);
+      const strongScore=parseInt(document.getElementById('al-strong-score')?.value||4);
+      const sellScore=parseInt(document.getElementById('al-sell-score')?.value||-4);
 
-  // MACD cross solo
-  if(macdUp&&prevMacd==='r'&&canSend('macd_up')){mark('macd_up');sendTelegram(`📊 <b>MACD CRUCE ALCISTA</b>\n<b>${coin}/USDT</b> — $${px}\nHistograma cruzó de negativo a positivo\nMomentum cambia a alcista ✅`);showToast(`📱 ${coin} MACD cruce ↑`,'warn');}
-  if(macdDown&&prevMacd==='b'&&canSend('macd_down')){mark('macd_down');sendTelegram(`📊 <b>MACD CRUCE BAJISTA</b>\n<b>${coin}/USDT</b> — $${px}\nHistograma cruzó de positivo a negativo\nMomentum cambia a bajista ⚠️`);showToast(`📱 ${coin} MACD cruce ↓`,'err');}
+      if(type==='rsi_low'&&rsi!==null&&rsi<rsiLow)
+        fire(type,`📉 <b>RSI BAJO</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (oversold) [${tf.toUpperCase()}]`,`📱 ${coin} RSI bajo ${rsi.toFixed(1)} [${tf}]`);
 
-  // Combined
-  if(rsi!==null&&rsi<mrRSI&&obv==='up'&&canSend('mr')){mark('mr');sendTelegram(`🔥 <b>MEAN REVERSION</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} ✅ OBV: acumulando ↑\nPuntaje: ${score>0?'+':''}${score}`);showToast(`📱 ${coin} Mean Reversion!`,'warn');}
-  if(rsi!==null&&rsi>obRSI&&obv==='down'&&canSend('ob')){mark('ob');sendTelegram(`🚨 <b>OVERBOUGHT COMBO</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} ⚠️ OBV: distribuyendo ↓`);showToast(`📱 ${coin} Overbought!`,'err');}
-  if(score>=strongScore&&canSend('strong')){mark('strong');sendTelegram(`💎 <b>STRONG BUY</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: <b>${score>0?'+':''}${score}/+5</b>\nRSI: ${rsi!==null?rsi.toFixed(1):'—'}`);showToast(`📱 ${coin} Strong Buy +${score}!`,'warn');}
-  if(score<=sellScore&&canSend('sell')){mark('sell');sendTelegram(`📉 <b>STRONG SELL</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: <b>${score}/-5</b>`);showToast(`📱 ${coin} Strong Sell ${score}!`,'err');}
+      if(type==='rsi_high'&&rsi!==null&&rsi>rsiHigh)
+        fire(type,`📈 <b>RSI ALTO</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (overbought) [${tf.toUpperCase()}]`,`📱 ${coin} RSI alto ${rsi.toFixed(1)} [${tf}]`);
 
-  // store prev states for cross detection next refresh
-  if(cdata[coin]){cdata[coin].prevMacdDir=macdUp?'b':macdDown?'r':null;if(d.obv)d.obv.prevTrend=obv;}
+      if(type==='rsi_rising'&&rsiSlope!==null&&rsiSlope>=risingPts)
+        fire(type,`📈 <b>RSI SUBIENDO RÁPIDO</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} (+${rsiSlope.toFixed(1)} pts en ${risingBars} velas) [${tf.toUpperCase()}]`,`📱 ${coin} RSI +${rsiSlope.toFixed(1)}pts [${tf}]`);
 
+      if(type==='rsi_cross30'&&rsi!==null&&prevRsi!==null&&prevRsi<=30&&rsi>30)
+        fire(type,`🚀 <b>RSI CRUZÓ 30 ↑</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} — salida de oversold [${tf.toUpperCase()}]`,`📱 ${coin} RSI cruzó 30↑ [${tf}]`);
+
+      if(type==='rsi_cross50'&&rsi!==null&&prevRsi!==null&&prevRsi<=50&&rsi>50)
+        fire(type,`💪 <b>RSI CRUZÓ 50 ↑</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} — momentum confirmado [${tf.toUpperCase()}]`,`📱 ${coin} RSI cruzó 50↑ [${tf}]`);
+
+      if(type==='obv_up'&&obv==='up'&&prevObv!=='up')
+        fire(type,`↑ <b>OBV ACUMULANDO</b>\n<b>${coin}/USDT</b> — $${px}\n[${tf.toUpperCase()}]`,`📱 ${coin} OBV acum [${tf}]`);
+
+      if(type==='obv_down'&&obv==='down'&&prevObv!=='down')
+        fire(type,`↓ <b>OBV DISTRIBUYENDO</b>\n<b>${coin}/USDT</b> — $${px}\n[${tf.toUpperCase()}]`,`📱 ${coin} OBV dist [${tf}]`,'err');
+
+      if(type==='spike_solo'&&spike>=spikeSoloX)
+        fire(type,`⚡ <b>VOLUME SPIKE</b>\n<b>${coin}/USDT</b> — $${px}\nSpike: ${spike.toFixed(1)}x [${tf.toUpperCase()}]`,`📱 ${coin} Spike ${spike.toFixed(1)}x [${tf}]`);
+
+      if(type==='spike_green'&&spike>=spikeGreenX&&ad.spike&&ad.spike.up)
+        fire(type,`⚡ <b>SPIKE VERDE</b>\n<b>${coin}/USDT</b> — $${px}\nSpike: ${spike.toFixed(1)}x [${tf.toUpperCase()}]`,`📱 ${coin} Spike verde ${spike.toFixed(1)}x [${tf}]`);
+
+      if(type==='macd_up'&&macdUp)
+        fire(type,`📊 <b>MACD CRUCE ALCISTA</b>\n<b>${coin}/USDT</b> — $${px}\n[${tf.toUpperCase()}]`,`📱 ${coin} MACD↑ [${tf}]`);
+
+      if(type==='macd_down'&&macdDown)
+        fire(type,`📊 <b>MACD CRUCE BAJISTA</b>\n<b>${coin}/USDT</b> — $${px}\n[${tf.toUpperCase()}]`,`📱 ${coin} MACD↓ [${tf}]`,'err');
+
+      if(type==='mr'&&rsi!==null&&rsi<mrRSI&&obv==='up')
+        fire(type,`🔥 <b>MEAN REVERSION</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} + OBV↑ [${tf.toUpperCase()}]`,`📱 ${coin} MR! [${tf}]`);
+
+      if(type==='ob'&&rsi!==null&&rsi>obRSI&&obv==='down')
+        fire(type,`🚨 <b>OVERBOUGHT COMBO</b>\n<b>${coin}/USDT</b> — $${px}\nRSI: ${rsi.toFixed(1)} + OBV↓ [${tf.toUpperCase()}]`,`📱 ${coin} OB! [${tf}]`,'err');
+
+      if(type==='strong'&&score>=strongScore)
+        fire(type,`💎 <b>STRONG BUY</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: +${score} [${tf.toUpperCase()}]`,`📱 ${coin} Strong +${score}! [${tf}]`);
+
+      if(type==='sell'&&score<=sellScore)
+        fire(type,`📉 <b>STRONG SELL</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: ${score} [${tf.toUpperCase()}]`,`📱 ${coin} Sell ${score}! [${tf}]`,'err');
+    }
+  }
+
+  // Also update obv prevTrend for cross detection
+  if(cdata[coin]&&d.obv)d.obv.prevTrend=d.obv.trend;
   checkAlert(coin,d.price);
 }
 /* ============ AUTO SCREENER ============ */

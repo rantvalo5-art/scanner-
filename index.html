@@ -1956,134 +1956,104 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       value:parseFloat(r[5]||vols[i]||0),
       color:parseFloat(r[4])>=parseFloat(r[1])?'rgba(26,122,110,0.5)':'rgba(239,83,80,0.5)'
     }));
-
     const LW=window.LightweightCharts;
-
-    // ── SINGLE CONTAINER ──
-    // Wrap all panes in one div so LWC manages one chart with multiple panes
-    const bodyEl=document.getElementById(`body-${coin}`);
-    if(!bodyEl)return;
-
-    // Calculate total height
-    const paneCount=1+(showMACD?1:0)+(showRSI?1:0)+(showOBV?1:0);
-    const totalH=mainH+(paneCount-1)*subH;
-    bodyEl.style.height=totalH+'px';
-
-    // Create ONE chart for the whole card
-    const chart=LW.createChart(bodyEl,{
-      width:bodyEl.offsetWidth,
-      height:totalH,
+    const SCALE_W=85;
+    const base={
       layout:{background:{type:'solid',color:'#131722'},textColor:'#9aa0ab'},
       grid:{vertLines:{color:'#1e2128'},horzLines:{color:'#1e2128'}},
       crosshair:{mode:0,vertLine:{labelBackgroundColor:'#2a2e38'},horzLine:{labelBackgroundColor:'#2a2e38'}},
       leftPriceScale:{visible:false},
-      rightPriceScale:{borderColor:'#2a2e38',autoScale:true},
-      timeScale:{borderColor:'#2a2e38',timeVisible:true,secondsVisible:false},
+      rightPriceScale:{borderColor:'#2a2e38',autoScale:true,width:SCALE_W},
+      timeScale:{borderColor:'#2a2e38',timeVisible:true,secondsVisible:false,visible:false},
       handleScroll:true,handleScale:true,
-    });
-
+    };
+    const bodyEl=document.getElementById(`body-${coin}`);
+    if(!bodyEl)return;
+    bodyEl.innerHTML='';
+    function makePane(h,label){
+      const d=document.createElement('div');
+      d.style.cssText=`width:100%;height:${h}px;position:relative`;
+      if(label){const l=document.createElement('div');l.className='chart-pane-label';l.textContent=label;d.appendChild(l);}
+      bodyEl.appendChild(d);return d;
+    }
     const lastPrice=closes[closes.length-1];
     function getPriceFormat(p){
       if(!p)return{type:'price',precision:8,minMove:0.00000001};
       const mag=Math.floor(Math.log10(Math.abs(p)));
-      const precision=Math.max(0,-mag+4);
-      const minMove=Math.pow(10,-precision);
-      return{type:'price',precision:Math.min(precision,10),minMove};
+      const prec=Math.max(0,-mag+4);
+      return{type:'price',precision:Math.min(prec,10),minMove:Math.pow(10,-Math.min(prec,10))};
     }
     const priceFormat=getPriceFormat(lastPrice);
-
-    // ── MAIN PANE (pane 0) ── Candles + Volume + MA
     const isUp=candles.length>1&&candles[candles.length-1].close>=candles[candles.length-2].close;
     const priceColor=isUp?'#1a7a6e':'#ef5350';
-
-    const cs=chart.addCandlestickSeries({
-      upColor:'#1a7a6e',downColor:'#ef5350',
-      borderVisible:false,
-      wickUpColor:'#1a7a6e',wickDownColor:'#ef5350',
-      priceFormat,lastValueVisible:false,priceLineVisible:false,
-    });
+    // MAIN
+    const mainEl=makePane(mainH,'MA9  MA21');
+    const hasMore=showMACD||showRSI||showOBV;
+    const mc=LW.createChart(mainEl,{...base,width:mainEl.offsetWidth,height:mainH,
+      timeScale:{...base.timeScale,visible:!hasMore}});
+    const cs=mc.addCandlestickSeries({upColor:'#1a7a6e',downColor:'#ef5350',borderVisible:false,
+      wickUpColor:'#1a7a6e',wickDownColor:'#ef5350',priceFormat,lastValueVisible:false,priceLineVisible:false});
     cs.setData(candles);
-    chart.priceScale('right').applyOptions({scaleMargins:{top:0.05,bottom:0.18}});
-
-    const priceLine=cs.createPriceLine({
-      price:candles[candles.length-1].close,
-      color:priceColor,lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'',
-    });
-
-    const vs=chart.addHistogramSeries({
-      priceFormat:{type:'volume'},priceScaleId:'vol',
-      lastValueVisible:false,priceLineVisible:false
-    });
-    chart.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0},borderVisible:false,visible:false});
+    mc.priceScale('right').applyOptions({scaleMargins:{top:0.05,bottom:0.18}});
+    const priceLine=cs.createPriceLine({price:candles[candles.length-1].close,color:priceColor,lineWidth:1,lineStyle:2,axisLabelVisible:true,title:''});
+    const vs=mc.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol',lastValueVisible:false,priceLineVisible:false});
+    mc.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0},borderVisible:false,visible:false});
     vs.setData(volData);
-
     if(showMA&&closes.length>=21){
       const cd=candles.map(c=>({time:c.time,value:c.close}));
-      const m9=chart.addLineSeries({color:'#f5a623',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
-      const m21=chart.addLineSeries({color:'#7b61ff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
-      m9.setData(emaLine(cd,9));
-      m21.setData(emaLine(cd,21));
+      mc.addLineSeries({color:'#f5a623',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(emaLine(cd,9));
+      mc.addLineSeries({color:'#7b61ff',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(emaLine(cd,21));
     }
-
-    let paneIndex=1;
-
-    // ── MACD PANE ──
+    mc.timeScale().fitContent();
+    const synced=[];
+    // MACD
     if(showMACD){
-      const macdPane=chart.addPane({height:subH});
+      const isLast=!showRSI&&!showOBV;
+      const el=makePane(subH,'MACD 12·26·9');
+      const ch=LW.createChart(el,{...base,width:el.offsetWidth,height:subH,timeScale:{...base.timeScale,visible:isLast}});
       const cd=candles.map(c=>({time:c.time,value:c.close}));
       const e12=emaLine(cd,12),e26=emaLine(cd,26);
       const ml=e12.map((v,i)=>({time:v.time,value:v.value-e26[i].value}));
       const sl=emaLine(ml,9);
-      const hs=chart.addHistogramSeries({pane:paneIndex,priceLineVisible:false,lastValueVisible:false});
-      hs.setData(ml.map((v,i)=>{const h=v.value-sl[i].value;return{time:v.time,value:h,color:h>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)';};}));
-      const ms=chart.addLineSeries({pane:paneIndex,color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
-      ms.setData(ml);
-      const ss=chart.addLineSeries({pane:paneIndex,color:'#ff9800',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
-      ss.setData(sl);
-      paneIndex++;
+      ch.addHistogramSeries({priceLineVisible:false,lastValueVisible:false})
+        .setData(ml.map((v,i)=>{const h=v.value-sl[i].value;return{time:v.time,value:h,color:h>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)'};}));
+      ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(ml);
+      ch.addLineSeries({color:'#ff9800',lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(sl);
+      ch.timeScale().fitContent();synced.push(ch);
     }
-
-    // ── RSI PANE ──
+    // RSI
     if(showRSI&&closes.length>=15){
-      const rsiPane=chart.addPane({height:subH});
+      const isLast=!showOBV;
+      const el=makePane(subH,'RSI 14');
+      const ch=LW.createChart(el,{...base,width:el.offsetWidth,height:subH,timeScale:{...base.timeScale,visible:isLast}});
       const rd=[];
       for(let i=14;i<closes.length;i++){const rv=calcRSI(closes.slice(0,i+1));if(rv!==null)rd.push({time:candles[i].time,value:rv});}
-      const rs=chart.addLineSeries({pane:paneIndex,color:'#9c27b0',lineWidth:1,priceLineVisible:false,lastValueVisible:true});
-      rs.setData(rd);
+      ch.addLineSeries({color:'#9c27b0',lineWidth:1,priceLineVisible:false,lastValueVisible:true}).setData(rd);
       if(rd.length>1){
         const t0=rd[0].time,tN=rd[rd.length-1].time;
-        const ob=chart.addLineSeries({pane:paneIndex,color:'rgba(239,83,80,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
-        const os=chart.addLineSeries({pane:paneIndex,color:'rgba(26,122,110,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
-        ob.setData([{time:t0,value:70},{time:tN,value:70}]);
-        os.setData([{time:t0,value:30},{time:tN,value:30}]);
+        ch.addLineSeries({color:'rgba(239,83,80,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false}).setData([{time:t0,value:70},{time:tN,value:70}]);
+        ch.addLineSeries({color:'rgba(26,122,110,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false}).setData([{time:t0,value:30},{time:tN,value:30}]);
       }
-      paneIndex++;
+      ch.timeScale().fitContent();synced.push(ch);
     }
-
-    // ── OBV PANE ──
+    // OBV
     if(showOBV){
-      const obvPane=chart.addPane({height:subH});
+      const el=makePane(subH,'OBV');
+      const ch=LW.createChart(el,{...base,width:el.offsetWidth,height:subH,timeScale:{...base.timeScale,visible:true}});
       let obv=0;
       const od=candles.map((c,i)=>{if(i>0){if(c.close>candles[i-1].close)obv+=vols[i];else if(c.close<candles[i-1].close)obv-=vols[i];}return{time:c.time,value:obv};});
-      const obvFmt={type:'custom',formatter:v=>{const a=Math.abs(v),s=v<0?'-':'';return a>=1e9?s+(a/1e9).toFixed(2)+'B':a>=1e6?s+(a/1e6).toFixed(2)+'M':a>=1e3?s+(a/1e3).toFixed(1)+'K':s+a.toFixed(0);}};
-      const os=chart.addLineSeries({pane:paneIndex,color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:true,priceFormat:obvFmt});
-      os.setData(od);
+      const obvFmt={type:'custom',formatter:v=>{const a=Math.abs(v),s=v<0?'-':'';return a>=1e9?s+(a/1e9).toFixed(1)+'B':a>=1e6?s+(a/1e6).toFixed(1)+'M':a>=1e3?s+(a/1e3).toFixed(0)+'K':s+a.toFixed(0);}};
+      ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:true,priceFormat:obvFmt}).setData(od);
+      ch.timeScale().fitContent();synced.push(ch);
     }
-
-    chart.timeScale().fitContent();
-
-    // ── LIVE WEBSOCKET ──
-    startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,chart,[],mainH,subH);
-
+    // Sync scroll
+    mc.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)synced.forEach(c=>c.timeScale().setVisibleLogicalRange(r));});
+    synced.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r){mc.timeScale().setVisibleLogicalRange(r);synced.forEach(s=>{if(s!==c)s.timeScale().setVisibleLogicalRange(r);});}}));
+    // Live WS
+    startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH);
   }catch(e){
     const el=document.getElementById(`body-${coin}`);
-    if(el)el.innerHTML=`<div style="color:#e24b4a;font-size:11px;padding:8px">Error cargando ${coin}: ${e.message}</div>`;
-  }
-}
-
-  }catch(e){
-    const el=document.getElementById(`pane-main-${coin}`);
-    if(el)el.innerHTML=`<div style="color:#e24b4a;font-size:11px;padding:8px">Error cargando ${coin}</div>`;
+    if(el)el.innerHTML=`<div style="color:#e24b4a;font-size:11px;padding:8px">Error: ${e.message}</div>`;
   }
 }
 

@@ -76,8 +76,10 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
 .badge{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
 .bg{background:#1a3d12;color:#7bc142}.bs{background:#3d1212;color:#e24b4a}.bn{background:#2e2600;color:#ef9f27}
 .score-max{font-size:10px;color:#4a5260}
-.minichart{margin:8px 0;height:180px;position:relative}
-.minichart canvas{width:100%!important;height:180px!important}
+.minichart{margin:8px 0;height:200px;position:relative;border-radius:8px;overflow:hidden}
+.minichart canvas{width:100%!important;height:200px!important}
+.tv-widget{width:100%;height:200px;border:none;border-radius:8px;display:block}
+.tv-placeholder{width:100%;height:200px;display:flex;align-items:center;justify-content:center;background:#1e2128;border-radius:8px;font-size:11px;color:#4a5260}
 .tfrow{display:flex;gap:4px;margin-bottom:8px}
 .tfbadge{flex:1;text-align:center;padding:3px 4px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid transparent}
 .tfbadge.tb{background:#1a3d12;color:#7bc142;border-color:#2d5a18}
@@ -280,6 +282,8 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
         <button id="view-cards-btn" onclick="setView('cards')" style="padding:7px 12px;font-size:13px;border:none;background:#282c35;color:#fff;cursor:pointer" title="Vista cards">⊞</button>
         <button id="view-table-btn" onclick="setView('table')" style="padding:7px 12px;font-size:13px;border:none;background:#21252d;color:#636b78;cursor:pointer;border-left:1px solid #2e3340" title="Vista tabla">☰</button>
       </div>
+      <div class="sep"></div>
+      <button onclick="openAllTradingView()" title="Abrir todos los gráficos en TradingView" style="padding:7px 13px;font-size:13px;border:1px solid #2e5a9a;border-radius:8px;background:#1a2d4a;color:#5b9bd5;cursor:pointer;white-space:nowrap;font-weight:600" id="tv-open-btn">📈 Abrir en TradingView</button>
     </div>
     <div class="chips">
       <span style="font-size:11px;color:#4a5260;align-self:center;margin-right:2px">Populares:</span>
@@ -940,7 +944,7 @@ function renderCard(coin,loading,err){
       <button class="rbtn" onclick="removeCoin('${coin}')">×</button>
       <div class="ch"><div class="cleft"><div class="cn">${d.symbol}/USDT</div><div class="cprow"><span class="cp">$${fmtPrice(d.price)}</span><span class="pchg ${chgCls}">${chgStr}</span></div></div>
       <div class="score-wrap"><div class="badge ${badgeClass(d.score)}">${d.score>0?'+':''}${d.score}</div><div class="score-max">de ±5</div></div></div>
-      <div class="minichart"><canvas id="spark-${coin}"></canvas></div>
+      <div class="minichart" id="tv-wrap-${coin}">${buildTVWidget(coin)}</div>
       <div class="tfrow"><div class="tfbadge ${tfB(d.tf1h)}">1H: ${tfL(d.tf1h)}</div><div class="tfbadge ${tfB(d.tf4h)}">4H: ${tfL(d.tf4h)}</div><div class="tfbadge ${tfB(d.tf1d)}">1D: ${tfL(d.tf1d)}</div></div>
       <div class="inds">${inds}</div>
       ${volRow}
@@ -951,7 +955,6 @@ function renderCard(coin,loading,err){
   if(isNew)document.getElementById('grid').appendChild(card);
   if(!loading&&!err&&cdata[coin]){
     setTimeout(()=>{
-      drawChart('spark-'+coin,cdata[coin]);
       const ai=document.getElementById('ai-'+coin);
       if(ai)ai.addEventListener('keydown',e=>{if(e.key==='Enter')setAlert(coin);});
     },50);
@@ -1757,6 +1760,90 @@ function checkTriggers(coin,d){
 
   checkAlert(coin,d.price);
 }
+/* ============ TRADINGVIEW ============ */
+function tvInterval(tf){return tf==='1h'?'60':tf==='4h'?'240':'D';}
+
+function buildTVWidget(coin){
+  const tf=document.getElementById('tf')?document.getElementById('tf').value:'4h';
+  const interval=tvInterval(tf);
+  const symbol=`BINANCE:${coin}USDT`;
+  const src=`https://s.tradingview.com/widgetembed/?frameElementId=tv_${coin}&symbol=${encodeURIComponent(symbol)}&interval=${interval}&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=0&toolbarbg=1e2128&studies=%5B%22MASimple%409%22%2C%22MASimple%4021%22%2C%22RSI%40tv-basicstudies%22%2C%22MACD%40tv-basicstudies%22%5D&theme=dark&style=1&timezone=exchange&withdateranges=0&showpopupbutton=0&locale=es`;
+  return `<iframe id="tv_${coin}" class="tv-widget" src="${src}" allowtransparency="true" scrolling="no" allowfullscreen></iframe>`;
+}
+
+function refreshTVWidgets(){
+  coins.forEach(coin=>{
+    const wrap=document.getElementById('tv-wrap-'+coin);
+    if(wrap&&cdata[coin])wrap.innerHTML=buildTVWidget(coin);
+  });
+}
+
+// Re-render TV widgets when timeframe changes
+const _origTf=document.getElementById('tf');
+if(_origTf){
+  _origTf.addEventListener('change',()=>{
+    setTimeout(refreshTVWidgets,200);
+  });
+}
+
+function openAllTradingView(){
+  const loaded=coins.filter(c=>cdata[c]);
+  if(!loaded.length){showToast('No hay monedas cargadas aún','warn');return;}
+  const tf=document.getElementById('tf').value;
+  const interval=tvInterval(tf);
+
+  // TradingView multi-chart layout URL
+  // Best approach: open each in its own tab with a small delay to avoid popup blocker
+  if(loaded.length===1){
+    const url=`https://www.tradingview.com/chart/?symbol=BINANCE:${loaded[0]}USDT&interval=${interval}`;
+    window.open(url,'_blank');
+    showToast(`Abriendo ${loaded[0]} en TradingView`);
+    return;
+  }
+
+  // For multiple coins, open TradingView with the first coin and show a modal with links
+  showTVModal(loaded, interval);
+}
+
+function showTVModal(coinList, interval){
+  const existing=document.getElementById('tv-modal');if(existing)existing.remove();
+  const cols=coinList.length<=4?coinList.length:coinList.length<=6?3:coinList.length<=9?3:4;
+  const linksHTML=coinList.map(c=>{
+    const url=`https://www.tradingview.com/chart/?symbol=BINANCE:${c}USDT&interval=${interval}`;
+    const d=cdata[c];
+    const scoreStr=d?(d.score>0?'+':'')+d.score:'';
+    const scoreCls=d&&d.score>=2?'#7bc142':d&&d.score<=-2?'#e24b4a':'#ef9f27';
+    return`<a href="${url}" target="_blank" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;background:#1e2128;border:1px solid #2e3340;border-radius:8px;text-decoration:none;transition:background 0.15s" onmouseover="this.style.background='#282c35'" onmouseout="this.style.background='#1e2128'">
+      <span style="font-size:13px;font-weight:700;color:#fff">${c}/USDT</span>
+      ${d?`<span style="font-size:12px;font-weight:700;color:${scoreCls}">${scoreStr}</span>`:''}
+    </a>`;
+  }).join('');
+
+  // Open all button
+  const openAllBtn=`<button onclick="(function(){${coinList.map((c,i)=>`setTimeout(()=>window.open('https://www.tradingview.com/chart/?symbol=BINANCE:${c}USDT&interval=${interval}','_blank'),${i*300})`).join(';')}})()" style="width:100%;padding:9px;font-size:13px;font-weight:600;border:1px solid #4a7c2f;border-radius:8px;background:#1a3d12;color:#7bc142;cursor:pointer;margin-bottom:10px">📈 Abrir todas (${coinList.length} pestañas)</button>`;
+
+  const modal=document.createElement('div');
+  modal.id='tv-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=`<div style="background:#21252d;border:1px solid #3d4452;border-radius:14px;padding:20px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:#fff">Abrir en TradingView</div>
+        <div style="font-size:11px;color:#4a5260;margin-top:2px">Timeframe: ${interval==='60'?'1H':interval==='240'?'4H':'1D'} · ${coinList.length} monedas</div>
+      </div>
+      <button onclick="document.getElementById('tv-modal').remove()" style="width:28px;height:28px;border-radius:50%;border:1px solid #3d4452;background:#1e2128;color:#9aa0ab;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">×</button>
+    </div>
+    ${openAllBtn}
+    <div style="font-size:11px;color:#4a5260;margin-bottom:10px">O abre individualmente:</div>
+    <div style="display:grid;grid-template-columns:repeat(${Math.min(cols,2)},1fr);gap:6px">
+      ${linksHTML}
+    </div>
+    <div style="font-size:10px;color:#3d4452;margin-top:12px;text-align:center">Los navegadores pueden bloquear ventanas múltiples — permite popups si es necesario</div>
+  </div>`;
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+  document.body.appendChild(modal);
+}
+
 const SUPA_HEADERS={'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};
 
 async function saveState(){

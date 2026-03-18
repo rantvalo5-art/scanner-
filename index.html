@@ -2084,15 +2084,25 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
     mc.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)synced.forEach(c=>c.timeScale().setVisibleLogicalRange(r));});
     synced.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)mc.timeScale().setVisibleLogicalRange(r);}));
 
-    // Force identical price scale width across all panes after LWC renders
-    setTimeout(()=>{
-      // Read the actual rendered width from main chart's time scale
-      const allCharts=[mc,...synced];
-      // Apply same fixed width to all — use 90px which fits most label formats
-      allCharts.forEach(c=>{
-        try{c.applyOptions({rightPriceScale:{width:90}});}catch(ex){}
+    // Align all panes: read actual price scale pixel width from DOM then force all to match
+    const allCharts=[mc,...synced];
+    function alignPanes(){
+      // LWC renders a table with a td for the price scale — find the widest one
+      const card=document.getElementById(`cc-${coin}`);
+      if(!card)return;
+      const tables=card.querySelectorAll('table');
+      let maxW=0;
+      tables.forEach(t=>{
+        // Last td in each row is the price scale
+        const tds=t.querySelectorAll('tr td:last-child');
+        tds.forEach(td=>{if(td.offsetWidth>maxW)maxW=td.offsetWidth;});
       });
-    },50);
+      if(maxW>0){
+        allCharts.forEach(c=>{try{c.applyOptions({rightPriceScale:{width:maxW}});}catch(ex){}});
+      }
+    }
+    setTimeout(alignPanes,100);
+    setTimeout(alignPanes,500); // second pass after data fully renders
 
     // ── LIVE WEBSOCKET ──
     startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH);

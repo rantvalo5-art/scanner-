@@ -2035,7 +2035,11 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       const el=makePane(subH,'RSI 14');
       const ch=LW.createChart(el,{...base,width:el.offsetWidth,height:subH,timeScale:{...base.timeScale,visible:isLast}});
       const rd=[];
-      for(let i=14;i<closes.length;i++){const rv=calcRSI(closes.slice(0,i+1));if(rv!==null)rd.push({time:candles[i].time,value:rv});}
+      for(let i=1;i<closes.length;i++){const rv=calcRSI(closes.slice(0,i+1));if(rv!==null)rd.push({time:candles[i].time,value:rv});}
+      // Pad start with first value so line extends to left edge
+      if(rd.length>0&&candles.length>0&&candles[0].time<rd[0].time){
+        rd.unshift({time:candles[0].time,value:rd[0].value});
+      }
       ch.addLineSeries({color:'#9c27b0',lineWidth:1,priceLineVisible:false,lastValueVisible:true}).setData(rd);
       if(rd.length>1){
         const t0=rd[0].time,tN=rd[rd.length-1].time;

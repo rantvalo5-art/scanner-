@@ -612,6 +612,15 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
         <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:#9aa0ab;cursor:pointer"><input type="checkbox" id="ind-obv" checked onchange="renderCharts()"> OBV</label>
         <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:#9aa0ab;cursor:pointer"><input type="checkbox" id="ind-ma" checked onchange="renderCharts()"> MA 9/21</label>
         <button onclick="renderCharts()" style="padding:4px 10px;font-size:12px;border:1px solid #2e3340;border-radius:7px;background:#21252d;color:#c8cdd5;cursor:pointer">↻</button>
+        <div class="sep" style="width:1px;height:20px;background:#2e3340;flex-shrink:0"></div>
+        <span style="font-size:11px;color:#4a5260">Velas:</span>
+        <select id="charts-limit" onchange="renderCharts()" style="padding:4px 7px;font-size:12px;border:1px solid #2e3340;border-radius:7px;background:#21252d;color:#e8ecf0;outline:none">
+          <option value="100">100</option>
+          <option value="200">200</option>
+          <option value="300" selected>300</option>
+          <option value="500">500</option>
+          <option value="1000">1000</option>
+        </select>
       </div>
     </div>
     <div id="charts-empty" style="text-align:center;padding:4rem;color:#3d4452;font-size:13px;border:1px dashed #1a1a1a;border-radius:12px;display:none">Agregá monedas en el Scanner primero</div>
@@ -2168,7 +2177,8 @@ async function renderCharts(){
 
 async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
   try{
-    const{closes,vols,rows}=await fetchTF(coin,tf,300);
+    const limit=parseInt(document.getElementById('charts-limit')?.value||'300');
+    const{closes,vols,rows}=await fetchTF(coin,tf,limit);
     const candles=rows.map(r=>({
       time:Math.floor(Number(r[0])/1000),
       open:parseFloat(r[1]),high:parseFloat(r[2]),low:parseFloat(r[3]),close:parseFloat(r[4])

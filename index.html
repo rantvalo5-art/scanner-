@@ -643,15 +643,13 @@ function fmtMACD(v){
   return v.toExponential(2);
 }
 function fmtPrice(p){
-  if(p===0||p===null||p===undefined)return'0';
-  if(p<0.000001)return p.toFixed(9);
-  if(p<0.00001)return p.toFixed(8);
-  if(p<0.0001)return p.toFixed(7);
-  if(p<0.001)return p.toFixed(6);
-  if(p<0.01)return p.toFixed(5);
-  if(p<1)return p.toFixed(4);
-  if(p<1000)return p.toFixed(3);
-  return p.toLocaleString('en-US',{maximumFractionDigits:0});
+  if(!p||p===0)return'0';
+  if(p>=1000)return p.toLocaleString('en-US',{maximumFractionDigits:2});
+  if(p>=100)return p.toFixed(3);
+  if(p>=1)return p.toFixed(4);
+  const mag=Math.floor(Math.log10(Math.abs(p)));
+  const decimals=Math.min(-mag+4,10);
+  return p.toFixed(decimals);
 }
 function fmtTarget(p){
   // Preserve exact precision for alert targets
@@ -1980,14 +1978,15 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
     const mc=LW.createChart(mainEl,{...base,width:mainEl.offsetWidth,height:mainH,
       rightPriceScale:{...base.rightPriceScale,scaleMargins:{top:0.06,bottom:0.20}}});
     const lastPrice=closes[closes.length-1];
-    const priceFormat=lastPrice<0.000001?{type:'price',precision:9,minMove:0.000000001}:
-      lastPrice<0.00001?{type:'price',precision:8,minMove:0.00000001}:
-      lastPrice<0.0001?{type:'price',precision:7,minMove:0.0000001}:
-      lastPrice<0.001?{type:'price',precision:6,minMove:0.000001}:
-      lastPrice<0.01?{type:'price',precision:5,minMove:0.00001}:
-      lastPrice<1?{type:'price',precision:4,minMove:0.0001}:
-      lastPrice<100?{type:'price',precision:3,minMove:0.001}:
-      {type:'price',precision:2,minMove:0.01};
+    // Calculate precision based on significant digits — always show 4 significant figures
+    function getPriceFormat(p){
+      if(p===0)return{type:'price',precision:8,minMove:0.00000001};
+      const mag=Math.floor(Math.log10(Math.abs(p)));
+      const precision=Math.max(0,-mag+4); // 4 significant digits
+      const minMove=Math.pow(10,-precision);
+      return{type:'price',precision:Math.min(precision,10),minMove};
+    }
+    const priceFormat=getPriceFormat(lastPrice);
 
     const isUp=candles.length>1&&candles[candles.length-1].close>=candles[candles.length-2].close;
     const priceColor=isUp?'#1a7a6e':'#ef5350';

@@ -2072,6 +2072,8 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
         const tr=mc.timeScale().getVisibleRange();
         if(tr)synced.forEach(c=>{try{c.timeScale().setVisibleRange(tr);}catch(e){}});
       }catch(e){}
+      // Also scroll all sub-panes to end to ensure right alignment
+      synced.forEach(c=>{try{c.timeScale().scrollToRealTime();}catch(e){}});
     },200);
     // Live WS
     startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH);

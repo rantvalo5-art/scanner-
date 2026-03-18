@@ -2035,14 +2035,21 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       const el=makePane(subH,'RSI 14');
       const ch=LW.createChart(el,{...base,width:el.offsetWidth,height:subH,timeScale:{...base.timeScale,visible:isLast}});
       const rd=[];
-      for(let i=1;i<closes.length;i++){const rv=calcRSI(closes.slice(0,i+1));if(rv!==null)rd.push({time:candles[i].time,value:rv});}
-      // Pad start with first value so line extends to left edge
-      if(rd.length>0&&candles.length>0&&candles[0].time<rd[0].time){
-        rd.unshift({time:candles[0].time,value:rd[0].value});
+      let firstRSI=null;
+      for(let i=0;i<closes.length;i++){
+        const rv=calcRSI(closes.slice(0,i+1));
+        if(rv!==null&&firstRSI===null)firstRSI=rv;
+        if(rv!==null)rd.push({time:candles[i].time,value:rv});
       }
-      ch.addLineSeries({color:'#9c27b0',lineWidth:1,priceLineVisible:false,lastValueVisible:true}).setData(rd);
-      if(rd.length>1){
-        const t0=rd[0].time,tN=rd[rd.length-1].time;
+      // Pad all candles before RSI starts with firstRSI value so all panes have same length
+      const rsiTimes=new Set(rd.map(r=>r.time));
+      const padded=candles
+        .filter(c=>!rsiTimes.has(c.time))
+        .map(c=>({time:c.time,value:firstRSI||50}));
+      const rdFull=[...padded,...rd].sort((a,b)=>a.time-b.time);
+      ch.addLineSeries({color:'#9c27b0',lineWidth:1,priceLineVisible:false,lastValueVisible:true}).setData(rdFull);
+      if(rdFull.length>1){
+        const t0=rdFull[0].time,tN=rdFull[rdFull.length-1].time;
         ch.addLineSeries({color:'rgba(239,83,80,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false}).setData([{time:t0,value:70},{time:tN,value:70}]);
         ch.addLineSeries({color:'rgba(26,122,110,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false}).setData([{time:t0,value:30},{time:tN,value:30}]);
       }

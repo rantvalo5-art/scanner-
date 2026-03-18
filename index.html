@@ -1913,11 +1913,7 @@ async function renderCharts(){
     const c1=d.tf1h>=2?'#7bc142':d.tf1h<=-2?'#e24b4a':'#636b78';
     const c4=d.tf4h>=2?'#7bc142':d.tf4h<=-2?'#e24b4a':'#636b78';
     const cd=d.tf1d>=2?'#7bc142':d.tf1d<=-2?'#e24b4a':'#636b78';
-    const subPanes=[
-      showMACD?`<div class="chart-pane" id="pane-macd-${coin}" style="height:${subH}px"><div class="chart-pane-label">MACD 12·26·9</div></div>`:'',
-      showRSI?`<div class="chart-pane" id="pane-rsi-${coin}" style="height:${subH}px"><div class="chart-pane-label">RSI 14</div></div>`:'',
-      showOBV?`<div class="chart-pane" id="pane-obv-${coin}" style="height:${subH}px"><div class="chart-pane-label">OBV</div></div>`:'',
-    ].join('');
+    const subPanes='';
     return`<div class="chart-card ${cardBorderCls}" id="cc-${coin}">
       <div class="chart-header">
         <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0">
@@ -1936,10 +1932,7 @@ async function renderCharts(){
         <span style="color:#3d4452">MACD</span><span style="color:${macdCol}">${macdSig?macdSig.s:'—'}</span>
         <span style="color:#3d4452">OBV</span><span style="color:${obvCol}">${obvTrend==='up'?'↑ acum':obvTrend==='down'?'↓ dist':'→'}</span>
       </div>
-      <div class="chart-body">
-        <div class="chart-pane" id="pane-main-${coin}" style="height:${mainH}px"><div class="chart-pane-label">MA9 MA21</div></div>
-        ${subPanes}
-      </div>
+      <div class="chart-body" id="body-${coin}"></div>
     </div>`;
   }).join('');
 
@@ -1963,149 +1956,130 @@ async function drawLWChart(coin,tf,showMA,showMACD,showRSI,showOBV,mainH,subH){
       value:parseFloat(r[5]||vols[i]||0),
       color:parseFloat(r[4])>=parseFloat(r[1])?'rgba(26,122,110,0.5)':'rgba(239,83,80,0.5)'
     }));
+
     const LW=window.LightweightCharts;
-    const base={
+
+    // ── SINGLE CONTAINER ──
+    // Wrap all panes in one div so LWC manages one chart with multiple panes
+    const bodyEl=document.getElementById(`body-${coin}`);
+    if(!bodyEl)return;
+
+    // Calculate total height
+    const paneCount=1+(showMACD?1:0)+(showRSI?1:0)+(showOBV?1:0);
+    const totalH=mainH+(paneCount-1)*subH;
+    bodyEl.style.height=totalH+'px';
+
+    // Create ONE chart for the whole card
+    const chart=LW.createChart(bodyEl,{
+      width:bodyEl.offsetWidth,
+      height:totalH,
       layout:{background:{type:'solid',color:'#131722'},textColor:'#9aa0ab'},
       grid:{vertLines:{color:'#1e2128'},horzLines:{color:'#1e2128'}},
       crosshair:{mode:0,vertLine:{labelBackgroundColor:'#2a2e38'},horzLine:{labelBackgroundColor:'#2a2e38'}},
       leftPriceScale:{visible:false},
-      rightPriceScale:{borderColor:'#2a2e38',autoScale:true,width:90},
+      rightPriceScale:{borderColor:'#2a2e38',autoScale:true},
       timeScale:{borderColor:'#2a2e38',timeVisible:true,secondsVisible:false},
-      handleScroll:true,handleScale:true};
+      handleScroll:true,handleScale:true,
+    });
 
-    const mainEl=document.getElementById(`pane-main-${coin}`);
-    if(!mainEl)return;
-    mainEl.innerHTML='<div class="chart-pane-label">MA9 MA21</div>';
-    const mc=LW.createChart(mainEl,{...base,width:mainEl.offsetWidth,height:mainH});
     const lastPrice=closes[closes.length-1];
-    // Calculate precision based on significant digits — always show 4 significant figures
     function getPriceFormat(p){
-      if(p===0)return{type:'price',precision:8,minMove:0.00000001};
+      if(!p)return{type:'price',precision:8,minMove:0.00000001};
       const mag=Math.floor(Math.log10(Math.abs(p)));
-      const precision=Math.max(0,-mag+4); // 4 significant digits
+      const precision=Math.max(0,-mag+4);
       const minMove=Math.pow(10,-precision);
       return{type:'price',precision:Math.min(precision,10),minMove};
     }
     const priceFormat=getPriceFormat(lastPrice);
 
+    // ── MAIN PANE (pane 0) ── Candles + Volume + MA
     const isUp=candles.length>1&&candles[candles.length-1].close>=candles[candles.length-2].close;
     const priceColor=isUp?'#1a7a6e':'#ef5350';
-    const cs=mc.addCandlestickSeries({
+
+    const cs=chart.addCandlestickSeries({
       upColor:'#1a7a6e',downColor:'#ef5350',
       borderVisible:false,
       wickUpColor:'#1a7a6e',wickDownColor:'#ef5350',
-      priceFormat,
-      lastValueVisible:false,
-      priceLineVisible:false,
+      priceFormat,lastValueVisible:false,priceLineVisible:false,
     });
     cs.setData(candles);
-    mc.priceScale('right').applyOptions({scaleMargins:{top:0.05,bottom:0.18}});
+    chart.priceScale('right').applyOptions({scaleMargins:{top:0.05,bottom:0.18}});
 
-    // Custom last price label with correct color
-    const lastCandle=candles[candles.length-1];
     const priceLine=cs.createPriceLine({
-      price:lastCandle.close,
-      color:priceColor,
-      lineWidth:1,
-      lineStyle:2,
-      axisLabelVisible:true,
-      title:'',
+      price:candles[candles.length-1].close,
+      color:priceColor,lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'',
     });
-    const vs=mc.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol',lastValueVisible:false,priceLineVisible:false});
-    mc.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0},borderVisible:false,visible:false});
+
+    const vs=chart.addHistogramSeries({
+      priceFormat:{type:'volume'},priceScaleId:'vol',
+      lastValueVisible:false,priceLineVisible:false
+    });
+    chart.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0},borderVisible:false,visible:false});
     vs.setData(volData);
+
     if(showMA&&closes.length>=21){
       const cd=candles.map(c=>({time:c.time,value:c.close}));
-      const m9=mc.addLineSeries({color:'#f5a623',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
-      const m21=mc.addLineSeries({color:'#7b61ff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
-      m9.setData(emaLine(cd,9));m21.setData(emaLine(cd,21));
+      const m9=chart.addLineSeries({color:'#f5a623',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+      const m21=chart.addLineSeries({color:'#7b61ff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+      m9.setData(emaLine(cd,9));
+      m21.setData(emaLine(cd,21));
     }
-    mc.timeScale().fitContent();
-    const synced=[];
 
+    let paneIndex=1;
+
+    // ── MACD PANE ──
     if(showMACD){
-      const el=document.getElementById(`pane-macd-${coin}`);
-      if(el){
-        el.innerHTML='<div class="chart-pane-label">MACD 12·26·9</div>';
-        const ch=LW.createChart(el,{...base,width:el.offsetWidth,height:subH,timeScale:{...base.timeScale,visible:false}});
-        const cd=candles.map(c=>({time:c.time,value:c.close}));
-        const e12=emaLine(cd,12),e26=emaLine(cd,26);
-        const ml=e12.map((v,i)=>({time:v.time,value:v.value-e26[i].value}));
-        const sl=emaLine(ml,9);
-        const hs=ch.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
-        hs.setData(ml.map((v,i)=>{const h=v.value-sl[i].value;return{time:v.time,value:h,color:h>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)'};}));
-        const ms=ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
-        ms.setData(ml);
-        const ss=ch.addLineSeries({color:'#ff9800',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
-        ss.setData(sl);
-        ch.timeScale().fitContent();synced.push(ch);
-      }
+      const macdPane=chart.addPane({height:subH});
+      const cd=candles.map(c=>({time:c.time,value:c.close}));
+      const e12=emaLine(cd,12),e26=emaLine(cd,26);
+      const ml=e12.map((v,i)=>({time:v.time,value:v.value-e26[i].value}));
+      const sl=emaLine(ml,9);
+      const hs=chart.addHistogramSeries({pane:paneIndex,priceLineVisible:false,lastValueVisible:false});
+      hs.setData(ml.map((v,i)=>{const h=v.value-sl[i].value;return{time:v.time,value:h,color:h>=0?'rgba(26,122,110,0.7)':'rgba(239,83,80,0.7)';};}));
+      const ms=chart.addLineSeries({pane:paneIndex,color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+      ms.setData(ml);
+      const ss=chart.addLineSeries({pane:paneIndex,color:'#ff9800',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+      ss.setData(sl);
+      paneIndex++;
     }
-    if(showRSI&&closes.length>=15){
-      const el=document.getElementById(`pane-rsi-${coin}`);
-      if(el){
-        el.innerHTML='<div class="chart-pane-label">RSI 14</div>';
-        const ch=LW.createChart(el,{...base,width:el.offsetWidth,height:subH,timeScale:{...base.timeScale,visible:false}});
-        const rd=[];
-        for(let i=14;i<closes.length;i++){const rv=calcRSI(closes.slice(0,i+1));if(rv!==null)rd.push({time:candles[i].time,value:rv});}
-        const rs=ch.addLineSeries({color:'#9c27b0',lineWidth:1,priceLineVisible:false,lastValueVisible:true});
-        rs.setData(rd);
-        if(rd.length>1){
-          const t0=rd[0].time,tN=rd[rd.length-1].time;
-          const ob=ch.addLineSeries({color:'rgba(239,83,80,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
-          const os=ch.addLineSeries({color:'rgba(26,122,110,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
-          ob.setData([{time:t0,value:70},{time:tN,value:70}]);
-          os.setData([{time:t0,value:30},{time:tN,value:30}]);
-        }
-        ch.timeScale().fitContent();synced.push(ch);
-      }
-    }
-    if(showOBV){
-      const el=document.getElementById(`pane-obv-${coin}`);
-      if(el){
-        el.innerHTML='<div class="chart-pane-label">OBV</div>';
-        const ch=LW.createChart(el,{...base,width:el.offsetWidth,height:subH,timeScale:{...base.timeScale,visible:true}});
-        let obv=0;
-        const od=candles.map((c,i)=>{if(i>0){if(c.close>candles[i-1].close)obv+=vols[i];else if(c.close<candles[i-1].close)obv-=vols[i];}return{time:c.time,value:obv};});
-        const os=ch.addLineSeries({color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:true,
-          priceFormat:{type:'custom',formatter:v=>{
-            const a=Math.abs(v);
-            const s=v<0?'-':'';
-            if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';
-            if(a>=1e6)return s+(a/1e6).toFixed(2)+'M';
-            if(a>=1e3)return s+(a/1e3).toFixed(1)+'K';
-            return s+a.toFixed(0);
-          }}});
-        os.setData(od);
-        ch.timeScale().fitContent();synced.push(ch);
-      }
-    }
-    // sync all sub-panes with main
-    mc.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)synced.forEach(c=>c.timeScale().setVisibleLogicalRange(r));});
-    synced.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)mc.timeScale().setVisibleLogicalRange(r);}));
 
-    // Align all panes: read actual price scale pixel width from DOM then force all to match
-    const allCharts=[mc,...synced];
-    function alignPanes(){
-      // LWC renders a table with a td for the price scale — find the widest one
-      const card=document.getElementById(`cc-${coin}`);
-      if(!card)return;
-      const tables=card.querySelectorAll('table');
-      let maxW=0;
-      tables.forEach(t=>{
-        // Last td in each row is the price scale
-        const tds=t.querySelectorAll('tr td:last-child');
-        tds.forEach(td=>{if(td.offsetWidth>maxW)maxW=td.offsetWidth;});
-      });
-      if(maxW>0){
-        allCharts.forEach(c=>{try{c.applyOptions({rightPriceScale:{width:maxW}});}catch(ex){}});
+    // ── RSI PANE ──
+    if(showRSI&&closes.length>=15){
+      const rsiPane=chart.addPane({height:subH});
+      const rd=[];
+      for(let i=14;i<closes.length;i++){const rv=calcRSI(closes.slice(0,i+1));if(rv!==null)rd.push({time:candles[i].time,value:rv});}
+      const rs=chart.addLineSeries({pane:paneIndex,color:'#9c27b0',lineWidth:1,priceLineVisible:false,lastValueVisible:true});
+      rs.setData(rd);
+      if(rd.length>1){
+        const t0=rd[0].time,tN=rd[rd.length-1].time;
+        const ob=chart.addLineSeries({pane:paneIndex,color:'rgba(239,83,80,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
+        const os=chart.addLineSeries({pane:paneIndex,color:'rgba(26,122,110,0.4)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
+        ob.setData([{time:t0,value:70},{time:tN,value:70}]);
+        os.setData([{time:t0,value:30},{time:tN,value:30}]);
       }
+      paneIndex++;
     }
-    setTimeout(alignPanes,100);
-    setTimeout(alignPanes,500); // second pass after data fully renders
+
+    // ── OBV PANE ──
+    if(showOBV){
+      const obvPane=chart.addPane({height:subH});
+      let obv=0;
+      const od=candles.map((c,i)=>{if(i>0){if(c.close>candles[i-1].close)obv+=vols[i];else if(c.close<candles[i-1].close)obv-=vols[i];}return{time:c.time,value:obv};});
+      const obvFmt={type:'custom',formatter:v=>{const a=Math.abs(v),s=v<0?'-':'';return a>=1e9?s+(a/1e9).toFixed(2)+'B':a>=1e6?s+(a/1e6).toFixed(2)+'M':a>=1e3?s+(a/1e3).toFixed(1)+'K':s+a.toFixed(0);}};
+      const os=chart.addLineSeries({pane:paneIndex,color:'#2196f3',lineWidth:1,priceLineVisible:false,lastValueVisible:true,priceFormat:obvFmt});
+      os.setData(od);
+    }
+
+    chart.timeScale().fitContent();
 
     // ── LIVE WEBSOCKET ──
-    startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,mc,synced,mainH,subH);
+    startLiveChart(coin,tf,cs,vs,priceLine,priceFormat,showMA,showMACD,showRSI,showOBV,candles,vols,closes,chart,[],mainH,subH);
+
+  }catch(e){
+    const el=document.getElementById(`body-${coin}`);
+    if(el)el.innerHTML=`<div style="color:#e24b4a;font-size:11px;padding:8px">Error cargando ${coin}: ${e.message}</div>`;
+  }
+}
 
   }catch(e){
     const el=document.getElementById(`pane-main-${coin}`);

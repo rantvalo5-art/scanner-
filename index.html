@@ -989,8 +989,9 @@ function checkAlert(coin,price){
     cd[cdKey]=now;
     changed=true;
     const arrow=a.dir==='below'?'↓':'↑';
-    showToast(`💰 ${coin} ${arrow} $${fmtPrice(a.target)}!`,'warn');
-    sendTelegram(`💰 <b>ALERTA DE PRECIO</b>\n<b>${coin}/USDT</b>\nPrecio: $${fmtPrice(price)}\nTarget: ${arrow} $${a.targetStr||fmtPrice(a.target)}`);
+    const tStr=a.targetStr||fmtTarget(a.target);
+    showToast(`💰 ${coin} ${arrow} $${tStr} — actual: $${fmtPrice(price)}`,'warn');
+    sendTelegram(`💰 <b>ALERTA DE PRECIO</b>\n<b>${coin}/USDT</b>\nPrecio actual: $${fmtPrice(price)}\nTarget: ${arrow} $${tStr}`);
     if(Notification.permission==='granted')new Notification(`💰 ${coin}`,{body:`$${fmtPrice(price)}`});
   });
   if(changed)_saveAlertCD(cd);
@@ -2584,6 +2585,16 @@ async function saveState(){
       const valMap={rsi_low:'al-rsi-low-val',rsi_high:'al-rsi-high-val',spike_solo:'al-spike-solo-x',spike_green:'al-spike-green-x',mr:'al-mr-rsi',ob:'al-ob-rsi',strong:'al-strong-score',sell:'al-sell-score'};
       const elId=valMap[k];
       if(elId){const el=document.getElementById(elId);if(el)globalToSave[k].val=parseFloat(el.value);}
+      // Save per-alert TF
+      const tfEl=document.getElementById('al-tf-'+k);
+      if(tfEl)globalToSave[k].tf=tfEl.value;
+      // Save extra params for rsi_rising
+      if(k==='rsi_rising'){
+        const pts=document.getElementById('al-rsi-rising-pts');
+        const bars=document.getElementById('al-rsi-rising-bars');
+        if(pts)globalToSave[k].pts=parseFloat(pts.value);
+        if(bars)globalToSave[k].bars=parseInt(bars.value);
+      }
     });
     await fetch(`${SUPA_URL}/rest/v1/scanner_state?id=eq.default`,{
       method:'PATCH',
@@ -2623,6 +2634,13 @@ async function loadState(){
             // restore val inputs
             const valMap={rsi_low:'al-rsi-low-val',rsi_high:'al-rsi-high-val',spike_solo:'al-spike-solo-x',spike_green:'al-spike-green-x',mr:'al-mr-rsi',ob:'al-ob-rsi',strong:'al-strong-score',sell:'al-sell-score'};
             if(typeof v==='object'&&v.val!==undefined&&valMap[k]){const el2=document.getElementById(valMap[k]);if(el2)el2.value=v.val;}
+            // Restore TF
+            if(typeof v==='object'&&v.tf){const tfEl=document.getElementById('al-tf-'+k);if(tfEl)tfEl.value=v.tf;}
+            // Restore rsi_rising extra params
+            if(k==='rsi_rising'&&typeof v==='object'){
+              if(v.pts!==undefined){const el=document.getElementById('al-rsi-rising-pts');if(el)el.value=v.pts;}
+              if(v.bars!==undefined){const el=document.getElementById('al-rsi-rising-bars');if(el)el.value=v.bars;}
+            }
           });
         }
         // Restore coin triggers (including individual indicator alerts)

@@ -386,7 +386,8 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states):
     macd_dir_def  = "up" if macd_def and macd_def["up"] else "down" if macd_def and macd_def["down"] else "flat"
     score_def = analyze(rsi_def, macd_def, calc_ema_cross(closes), calc_bb(closes), calc_spike(vols, closes))
 
-    print(f"    [{default_tf}] RSI={rsi_def:.1f if rsi_def else 'N/A'} Score={score_def} OBV={obv_trend_def} MACD={macd_dir_def}")
+    rsi_str = f"{rsi_def:.1f}" if rsi_def else "N/A"
+    print(f"    [{default_tf}] RSI={rsi_str} Score={score_def} OBV={obv_trend_def} MACD={macd_dir_def}")
 
     def chk(t): return is_enabled(coin, t, global_triggers, coin_triggers) and can_send(coin, t)
     def gv(t, d): return get_val(t, global_triggers, d)

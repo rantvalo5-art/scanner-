@@ -968,24 +968,66 @@ function testTelegram(){
   ).then(()=>showToast('✅ Mensaje enviado a Telegram!'));
 }
 
-function _loadAlertCD(){
-  try{const s=localStorage.getItem('alert_cd');return s?JSON.parse(s):{};}catch(e){return{};}
+// CORREGIDO: Usar Supabase para cooldowns en vez de localStorage (consistente con el bot Python)
+async function _loadAlertCD(){
+  try{
+    const r=await fetch(`${SUPA_URL}/rest/v1/alert_cooldowns?id=eq.default`,{headers:SUPA_HEADERS});
+    if(r.ok){
+      const data=await r.json();
+      if(data&&data[0]&&data[0].cooldowns)return data[0].cooldowns;
+    }
+  }catch(e){console.log('Could not load cooldowns from Supabase:',e);}
+  return{};
 }
-function _saveAlertCD(cd){
-  try{localStorage.setItem('alert_cd',JSON.stringify(cd));}catch(e){}
+async function _saveAlertCD(cd){
+  try{
+    // Clean old entries (older than 30 minutes)
+    const now=Date.now();
+    const COOLDOWN=30*60*1000;
+    const cleaned={};
+    Object.keys(cd).forEach(k=>{if(now-cd[k]<COOLDOWN)cleaned[k]=cd[k];});
+    
+    const r=await fetch(`${SUPA_URL}/rest/v1/alert_cooldowns`,{
+      method:'POST',
+      headers:SUPA_HEADERS,
+      body:JSON.stringify({id:'default',cooldowns:cleaned,updated_at:new Date().toISOString()})
+    });
+    if(!r.ok){
+      // If insert failed, try update
+      await fetch(`${SUPA_URL}/rest/v1/alert_cooldowns?id=eq.default`,{
+        method:'PATCH',
+        headers:SUPA_HEADERS,
+        body:JSON.stringify({cooldowns:cleaned,updated_at:new Date().toISOString()})
+      });
+    }
+  }catch(e){console.log('Could not save cooldowns to Supabase:',e);}
 }
 
-function checkAlert(coin,price){
+// CORREGIDO: Sistema de cooldown usando Supabase (consistente con el bot Python)
+async function checkAlert(coin,price){
   if(!alerts[coin]||!alerts[coin].length)return;
   const now=Date.now();
-  const COOLDOWN=30*60*1000; // 30 minutes — persists across reloads
-  const cd=_loadAlertCD();
+  const COOLDOWN=30*60*1000; // 30 minutes — persists across reloads via Supabase
+  const cd=await _loadAlertCD();
   let changed=false;
-  alerts[coin].forEach(a=>{
+  
+  // NUEVO: Validar que no haya alertas duplicadas antes de verificar
+  const seenAlerts=new Set();
+  alerts[coin]=alerts[coin].filter(a=>{
+    const key=`${a.dir}_${a.target}`;
+    if(seenAlerts.has(key))return false;
+    seenAlerts.add(key);
+    return true;
+  });
+  
+  for(const a of alerts[coin]){
     const hit=(a.dir==='below'&&price<=a.target)||(a.dir==='above'&&price>=a.target);
-    if(!hit)return;
+    if(!hit)continue;
+    
+    // CORREGIDO: Usar misma clave que el bot Python
     const cdKey=`${coin}_${a.dir}_${a.target}`;
-    if(now-(cd[cdKey]||0)<COOLDOWN)return; // still in cooldown — skip
+    if(now-(cd[cdKey]||0)<COOLDOWN)continue; // still in cooldown — skip
+    
     cd[cdKey]=now;
     changed=true;
     const arrow=a.dir==='below'?'↓':'↑';
@@ -993,12 +1035,13 @@ function checkAlert(coin,price){
     showToast(`💰 ${coin} ${arrow} $${tStr} — actual: $${fmtPrice(price)}`,'warn');
     sendTelegram(`💰 <b>ALERTA DE PRECIO</b>\n<b>${coin}/USDT</b>\nPrecio actual: $${fmtPrice(price)}\nTarget: ${arrow} $${tStr}`);
     if(Notification.permission==='granted')new Notification(`💰 ${coin}`,{body:`$${fmtPrice(price)}`});
-  });
-  if(changed)_saveAlertCD(cd);
+  }
+  
+  if(changed)await _saveAlertCD(cd);
   // Alerts are persistent — never delete on hit
   // Do NOT call renderCard or saveState here — loadCoin handles render after this
 }
-function setAlert(coin){
+async function setAlert(coin){
   const inp=document.getElementById('ai-'+coin);
   const raw=inp.value.trim().replace(',','.');
   const val=parseFloat(raw);
@@ -1006,20 +1049,34 @@ function setAlert(coin){
   const dirSel=document.getElementById('ad-'+coin);
   const dir=dirSel?dirSel.value:(val<(cdata[coin]?cdata[coin].price:0)?'below':'above');
   const arrow=dir==='below'?'↓ baja de':'↑ sube a';
+  
   if(!alerts[coin])alerts[coin]=[];
+  
+  // NUEVO: Validar que no exista la misma alerta
+  const exists=alerts[coin].some(a=>a.dir===dir&&a.target===val);
+  if(exists){
+    showToast('⚠️ Esta alerta ya existe','warn');
+    inp.value='';
+    return;
+  }
+  
   alerts[coin].push({target:val,targetStr:raw,dir});
-  // Pre-seed cooldown so alert doesn't fire immediately if price already meets condition
-  if(!checkAlert._cd)checkAlert._cd={};
-  checkAlert._cd[`${coin}_${dir}_${val}`]=Date.now();
+  
+  // CORREGIDO: Pre-seed cooldown en Supabase para que no dispare inmediatamente
+  const cd=await _loadAlertCD();
+  const cdKey=`${coin}_${dir}_${val}`;
+  cd[cdKey]=Date.now();
+  await _saveAlertCD(cd);
+  
   inp.value='';
   renderCard(coin,false,false);
   if(stateLoaded)saveState();
   if(Notification.permission==='default')Notification.requestPermission();
   showToast(`💰 Alerta: ${coin} ${arrow} $${raw}`);
 }
-function clearAlert(coin,idx){
+async function clearAlert(coin,idx){
   // Also clear the cooldown for removed alerts so they fire fresh if re-added
-  const cd=_loadAlertCD();
+  const cd=await _loadAlertCD();
   let cdChanged=false;
   if(idx===undefined){
     // Remove all cooldowns for this coin
@@ -1033,7 +1090,7 @@ function clearAlert(coin,idx){
       if(!alerts[coin].length)delete alerts[coin];
     }
   }
-  if(cdChanged)_saveAlertCD(cd);
+  if(cdChanged)await _saveAlertCD(cd);
   if(stateLoaded)saveState();renderCard(coin,false,false);
 }
 
@@ -2008,7 +2065,7 @@ async function checkTriggers(coin,d){
 
   // Also update obv prevTrend for cross detection
   if(cdata[coin]&&d.obv)d.obv.prevTrend=d.obv.trend;
-  checkAlert(coin,d.price);
+  await checkAlert(coin,d.price);
 }
 /* ============ AUTO SCREENER ============ */
 let scrRunning=false;

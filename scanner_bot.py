@@ -33,7 +33,7 @@ SUPA_HEADERS = {
 BINANCE_BASE = "https://api.binance.com/api/v3"
 
 # NUEVO: Cooldown de 30 minutos (consistente con el HTML)
-COOLDOWN_SECONDS = 1800  # 30 minutos = 1800 segundos
+COOLDOWN_SECONDS = 120  # 30 minutos = 1800 segundos
 
 # Global dict para cooldowns (se carga/guarda en Supabase)
 SENT_ALERTS = {}

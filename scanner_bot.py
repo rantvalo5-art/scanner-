@@ -156,8 +156,6 @@ def fetch_realtime_price(symbol):
     except: pass
     return None
 
-    return None
-
 def fetch_klines(symbol, interval="4h", limit=100):
     # 1. Try Binance global
     try:
@@ -229,52 +227,6 @@ def fetch_klines(symbol, interval="4h", limit=100):
         pass
 
     raise Exception(f"No data source available for {symbol}")
-    try:
-        url = f"{BINANCE_BASE}/klines"
-        params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit + 1}
-        r = requests.get(url, params=params, timeout=10)
-        if r.status_code == 200:
-            rows = r.json()[:-1]
-            return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
-    except: pass
-
-    # 2. OKX — works from GitHub Actions
-    try:
-        interval_map = {"1h": "1H", "4h": "4H", "1d": "1D"}
-        okx_bar = interval_map.get(interval, "4H")
-        url = "https://www.okx.com/api/v5/market/candles"
-        params = {"instId": f"{symbol}-USDT", "bar": okx_bar, "limit": str(limit + 1)}
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if data.get("code") != "0":
-            raise Exception(f"OKX error: {data.get('msg')}")
-        rows = list(reversed(data["data"]))[:-1]
-        closes = [float(row[4]) for row in rows]
-        vols   = [float(row[7]) for row in rows]
-        return closes, vols
-    except Exception as e:
-        if "OKX error" in str(e):
-            pass  # pair not found on OKX, try KuCoin
-        else:
-            raise
-
-    # 3. KuCoin fallback — for coins not on OKX (e.g. DEXE)
-    interval_map_kc = {"1h": "1hour", "4h": "4hour", "1d": "1day"}
-    kc_interval = interval_map_kc.get(interval, "4hour")
-    url = "https://api.kucoin.com/api/v1/market/candles"
-    params = {"symbol": f"{symbol}-USDT", "type": kc_interval}
-    r = requests.get(url, params=params, timeout=10)
-    r.raise_for_status()
-    data = r.json()
-    if data.get("code") != "200000":
-        raise Exception(f"KuCoin error: {data.get('msg')}")
-    # KuCoin: [timestamp, open, close, high, low, volume, turnover] newest first
-    rows = list(reversed(data["data"]))[-limit-1:-1]
-    closes = [float(row[2]) for row in rows]
-    vols   = [float(row[6]) for row in rows]  # turnover in USDT
-    return closes, vols
 
 
 
@@ -381,99 +333,158 @@ def mark_sent(coin, trigger_type):
 
 # ============ MAIN CHECK ============
 
-def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
-    print(f"\n  Checking {coin} ({interval})...")
-    closes, vols = None, None
-    for attempt in range(3):
-        try:
-            closes, vols = fetch_klines(coin, interval, 100)
-            break
-        except Exception as e:
-            if attempt < 2:
-                print(f"  ⚠️ Retry {attempt+2}/3 for {coin}: {e}")
-                time.sleep(2)
-            else:
-                print(f"  ❌ Fetch error for {coin}: {e}")
-                return {}
+def get_tf(trigger_type, global_triggers, default_tf):
+    """Get the timeframe configured for a specific trigger"""
+    g = global_triggers.get(trigger_type, {})
+    if isinstance(g, dict):
+        return g.get("tf", default_tf)
+    return default_tf
+
+def get_extra(trigger_type, global_triggers, key, default):
+    """Get extra param (pts, bars) for a trigger"""
+    g = global_triggers.get(trigger_type, {})
+    if isinstance(g, dict):
+        return g.get(key, default)
+    return default
+
+# ============ MAIN CHECK ============
+
+def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states):
+    print(f"\n  Checking {coin}...")
+
+    # Cache fetched data per TF to avoid duplicate requests
+    _tf_cache = {}
+
+    def get_data(tf):
+        if tf not in _tf_cache:
+            for attempt in range(3):
+                try:
+                    closes, vols = fetch_klines(coin, tf, 100)
+                    _tf_cache[tf] = (closes, vols)
+                    break
+                except Exception as e:
+                    if attempt < 2:
+                        time.sleep(2)
+                    else:
+                        print(f"  ❌ Fetch error for {coin} [{tf}]: {e}")
+                        _tf_cache[tf] = (None, None)
+        return _tf_cache[tf]
+
+    # Fetch default TF for price and state tracking
+    closes, vols = get_data(default_tf)
     if not closes:
         return {}
 
-    rsi   = calc_rsi(closes)
-    macd  = calc_macd(closes)
-    em    = calc_ema_cross(closes)
-    bb    = calc_bb(closes)
-    vol   = calc_spike(vols, closes)
-    obv   = calc_obv(vols, closes)
-    score = analyze(rsi, macd, em, bb, calc_spike(vols, closes))
     price = closes[-1]
-    px    = fmt_price(price)
+    px = fmt_price(price)
 
-    obv_trend  = obv["trend"] if obv else "flat"
-    prev_obv   = prev_states.get(coin, {}).get("obv", "flat")
-    spike_r    = vol["ratio"] if vol else 0
-    macd_dir   = "up" if macd and macd["up"] else "down" if macd and macd["down"] else "flat"
-    prev_macd  = prev_states.get(coin, {}).get("macd", "flat")
+    # Compute indicators on default TF for state tracking
+    rsi_def   = calc_rsi(closes)
+    macd_def  = calc_macd(closes)
+    obv_def   = calc_obv(vols, closes)
+    obv_trend_def = obv_def["trend"] if obv_def else "flat"
+    macd_dir_def  = "up" if macd_def and macd_def["up"] else "down" if macd_def and macd_def["down"] else "flat"
+    score_def = analyze(rsi_def, macd_def, calc_ema_cross(closes), calc_bb(closes), calc_spike(vols, closes))
 
-    rsi_str = f"{rsi:.1f}" if rsi else "N/A"
-    print(f"    RSI={rsi_str} Score={score} OBV={obv_trend} Spike={spike_r:.1f}x MACD={macd_dir}")
+    print(f"    [{default_tf}] RSI={rsi_def:.1f if rsi_def else 'N/A'} Score={score_def} OBV={obv_trend_def} MACD={macd_dir_def}")
 
     def chk(t): return is_enabled(coin, t, global_triggers, coin_triggers) and can_send(coin, t)
     def gv(t, d): return get_val(t, global_triggers, d)
 
-    # RSI solo — fire whenever condition is true
-    if rsi is not None and rsi < gv("rsi_low", 30) and chk("rsi_low"):
-        mark_sent(coin, "rsi_low")
-        send_telegram(f"📉 <b>RSI BAJO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (oversold ✅)")
+    # ── Check each trigger with its own TF ──
+    active_triggers = [k for k in global_triggers if is_enabled(coin, k, global_triggers, coin_triggers)]
 
-    if rsi is not None and rsi > gv("rsi_high", 70) and chk("rsi_high"):
-        mark_sent(coin, "rsi_high")
-        send_telegram(f"📈 <b>RSI ALTO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (overbought ⚠️)")
+    for trigger in active_triggers:
+        if not can_send(coin, trigger):
+            continue
 
-    # OBV — fire whenever condition is true (cooldown prevents spam)
-    if obv_trend == "up" and chk("obv_up"):
-        mark_sent(coin, "obv_up")
-        send_telegram(f"↑ <b>OBV ACUMULANDO</b>\n<b>{coin}/USDT</b> — ${px}\nCompradores entrando silenciosamente")
+        tf = get_tf(trigger, global_triggers, default_tf)
+        c, v = get_data(tf)
+        if not c:
+            continue
 
-    if obv_trend == "down" and chk("obv_down"):
-        mark_sent(coin, "obv_down")
-        send_telegram(f"↓ <b>OBV DISTRIBUYENDO</b>\n<b>{coin}/USDT</b> — ${px}\nVendedores saliendo silenciosamente")
+        rsi   = calc_rsi(c)
+        macd  = calc_macd(c)
+        em    = calc_ema_cross(c)
+        bb    = calc_bb(c)
+        vol   = calc_spike(v, c)
+        obv   = calc_obv(v, c)
+        score = analyze(rsi, macd, em, bb, vol)
+        obv_trend = obv["trend"] if obv else "flat"
+        spike_r   = vol["ratio"] if vol else 0
+        macd_dir  = "up" if macd and macd["up"] else "down" if macd and macd["down"] else "flat"
+        tf_tag    = f"[{tf.upper()}]"
 
-    # Volume Spike solo
-    if spike_r >= gv("spike_solo", 3.0) and chk("spike_solo"):
-        mark_sent(coin, "spike_solo")
-        vroc = vol["vroc"] if vol else 0
-        send_telegram(f"⚡ <b>VOLUME SPIKE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x promedio\nVROC: {vroc:+.0f}%")
+        prev_rsi  = prev_states.get(coin, {}).get(f"rsi_{tf}", None)
+        prev_obv  = prev_states.get(coin, {}).get(f"obv_{tf}", "flat")
+        prev_macd = prev_states.get(coin, {}).get(f"macd_{tf}", "flat")
 
-    if spike_r >= gv("spike_green", 3.0) and vol and vol["up"] and chk("spike_green"):
-        mark_sent(coin, "spike_green")
-        send_telegram(f"⚡ <b>VOLUME SPIKE VERDE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x + vela verde 🔥\nCompra masiva detectada")
+        if trigger == "rsi_low" and rsi is not None and rsi < gv("rsi_low", 30):
+            mark_sent(coin, trigger)
+            send_telegram(f"📉 <b>RSI BAJO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (oversold ✅) {tf_tag}")
 
-    # MACD cross solo (solo cuando cruza)
-    if macd_dir == "up" and chk("macd_up"):
-        mark_sent(coin, "macd_up")
-        send_telegram(f"📊 <b>MACD CRUCE ALCISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó de negativo a positivo\nMomentum cambia a alcista ✅")
+        elif trigger == "rsi_high" and rsi is not None and rsi > gv("rsi_high", 70):
+            mark_sent(coin, trigger)
+            send_telegram(f"📈 <b>RSI ALTO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (overbought ⚠️) {tf_tag}")
 
-    if macd_dir == "down" and chk("macd_down"):
-        mark_sent(coin, "macd_down")
-        send_telegram(f"📊 <b>MACD CRUCE BAJISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó de positivo a negativo\nMomentum cambia a bajista ⚠️")
+        elif trigger == "rsi_rising" and rsi is not None and prev_rsi is not None:
+            pts  = get_extra("rsi_rising", global_triggers, "pts", 3)
+            slope = rsi - prev_rsi
+            if slope >= pts:
+                mark_sent(coin, trigger)
+                send_telegram(f"📈 <b>RSI SUBIENDO RÁPIDO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} (+{slope:.1f} pts) {tf_tag}")
 
-    # Combined
-    if rsi is not None and rsi < gv("mr", 35) and obv_trend == "up" and chk("mr"):
-        mark_sent(coin, "mr")
-        send_telegram(f"🔥 <b>MEAN REVERSION</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} ✅  OBV: acumulando ↑\nPuntaje: {score:+d}")
+        elif trigger == "rsi_cross30" and rsi is not None and prev_rsi is not None:
+            if prev_rsi <= 30 and rsi > 30:
+                mark_sent(coin, trigger)
+                send_telegram(f"🚀 <b>RSI CRUZÓ 30 ↑</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} — salida de oversold {tf_tag}")
 
-    if rsi is not None and rsi > gv("ob", 70) and obv_trend == "down" and chk("ob"):
-        mark_sent(coin, "ob")
-        send_telegram(f"🚨 <b>OVERBOUGHT COMBO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} ⚠️  OBV: distribuyendo ↓")
+        elif trigger == "rsi_cross50" and rsi is not None and prev_rsi is not None:
+            if prev_rsi <= 50 and rsi > 50:
+                mark_sent(coin, trigger)
+                send_telegram(f"💪 <b>RSI CRUZÓ 50 ↑</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} — momentum confirmado {tf_tag}")
 
-    if score >= gv("strong", 4) and chk("strong"):
-        mark_sent(coin, "strong")
-        rsi_str = f"{rsi:.1f}" if rsi else "—"
-        send_telegram(f"💎 <b>STRONG BUY</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score:+d}/+5</b>\nRSI: {rsi_str}")
+        elif trigger == "obv_up" and obv_trend == "up" and prev_obv != "up":
+            mark_sent(coin, trigger)
+            send_telegram(f"↑ <b>OBV ACUMULANDO</b>\n<b>{coin}/USDT</b> — ${px}\nCompradores entrando {tf_tag}")
 
-    if score <= gv("sell", -4) and chk("sell"):
-        mark_sent(coin, "sell")
-        send_telegram(f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score}/-5</b>")
+        elif trigger == "obv_down" and obv_trend == "down" and prev_obv != "down":
+            mark_sent(coin, trigger)
+            send_telegram(f"↓ <b>OBV DISTRIBUYENDO</b>\n<b>{coin}/USDT</b> — ${px}\nVendedores saliendo {tf_tag}")
+
+        elif trigger == "spike_solo" and spike_r >= gv("spike_solo", 3.0):
+            mark_sent(coin, trigger)
+            vroc = vol["vroc"] if vol else 0
+            send_telegram(f"⚡ <b>VOLUME SPIKE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x VROC: {vroc:+.0f}% {tf_tag}")
+
+        elif trigger == "spike_green" and spike_r >= gv("spike_green", 3.0) and vol and vol["up"]:
+            mark_sent(coin, trigger)
+            send_telegram(f"⚡ <b>SPIKE VERDE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x + vela verde 🔥 {tf_tag}")
+
+        elif trigger == "macd_up" and macd_dir == "up" and prev_macd != "up":
+            mark_sent(coin, trigger)
+            send_telegram(f"📊 <b>MACD CRUCE ALCISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó positivo ✅ {tf_tag}")
+
+        elif trigger == "macd_down" and macd_dir == "down" and prev_macd != "down":
+            mark_sent(coin, trigger)
+            send_telegram(f"📊 <b>MACD CRUCE BAJISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó negativo ⚠️ {tf_tag}")
+
+        elif trigger == "mr" and rsi is not None and rsi < gv("mr", 35) and obv_trend == "up":
+            mark_sent(coin, trigger)
+            send_telegram(f"🔥 <b>MEAN REVERSION</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} + OBV↑ Puntaje: {score:+d} {tf_tag}")
+
+        elif trigger == "ob" and rsi is not None and rsi > gv("ob", 70) and obv_trend == "down":
+            mark_sent(coin, trigger)
+            send_telegram(f"🚨 <b>OVERBOUGHT COMBO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi:.1f} + OBV↓ {tf_tag}")
+
+        elif trigger == "strong" and score >= gv("strong", 4):
+            mark_sent(coin, trigger)
+            rsi_str = f"{rsi:.1f}" if rsi else "—"
+            send_telegram(f"💎 <b>STRONG BUY</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score:+d}/+5</b> RSI: {rsi_str} {tf_tag}")
+
+        elif trigger == "sell" and score <= gv("sell", -4):
+            mark_sent(coin, trigger)
+            send_telegram(f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score}/-5</b> {tf_tag}")
 
     # ---- Individual indicator alerts per coin ----
     ct = coin_triggers.get(coin, {})
@@ -481,57 +492,67 @@ def check_coin(coin, interval, global_triggers, coin_triggers, prev_states):
     if not isinstance(ind_alerts, list):
         ind_alerts = []
 
-    # Cache fetched closes/vols per TF to avoid duplicate requests
-    _tf_cache = {interval: (closes, vols)}
-
-    def get_tf_data(tf):
-        if tf not in _tf_cache:
-            try:
-                _tf_cache[tf] = fetch_klines(coin, tf, 100)
-            except:
-                _tf_cache[tf] = (None, None)
-        return _tf_cache[tf]
-
     for alert in ind_alerts:
         atype = alert.get("type", "")
         aval  = alert.get("val")
-        atf   = alert.get("tf", interval)
-        c2, v2 = get_tf_data(atf)
+        atf   = alert.get("tf", default_tf)
+        c2, v2 = get_data(atf)
         if not c2:
+            continue
+        alert_key = f"ind_{atype}_{atf}"
+        if not can_send(coin, alert_key):
             continue
 
         if atype == "rsi_low" and aval is not None:
             rsi2 = calc_rsi(c2)
             if rsi2 is not None and rsi2 < float(aval):
-                send_telegram(f"📉 <b>RSI BAJO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nRSI ({atf}): {rsi2:.1f} (menor a {aval})")
+                mark_sent(coin, alert_key)
+                send_telegram(f"📉 <b>RSI BAJO — {coin}</b>\nRSI ({atf.upper()}): {rsi2:.1f} < {aval} — ${px}")
 
         elif atype == "rsi_high" and aval is not None:
             rsi2 = calc_rsi(c2)
             if rsi2 is not None and rsi2 > float(aval):
-                send_telegram(f"📈 <b>RSI ALTO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nRSI ({atf}): {rsi2:.1f} (mayor a {aval})")
+                mark_sent(coin, alert_key)
+                send_telegram(f"📈 <b>RSI ALTO — {coin}</b>\nRSI ({atf.upper()}): {rsi2:.1f} > {aval} — ${px}")
 
         elif atype == "score_up" and aval is not None:
             sc2 = analyze(calc_rsi(c2), calc_macd(c2), calc_ema_cross(c2), calc_bb(c2), calc_spike(v2, c2))
             if sc2 >= int(aval):
-                send_telegram(f"💎 <b>SCORE ALTO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nScore ({atf}): {sc2:+d} (mayor o igual a {aval})")
+                mark_sent(coin, alert_key)
+                send_telegram(f"💎 <b>SCORE ALTO — {coin}</b>\nScore ({atf.upper()}): {sc2:+d} ≥ {aval} — ${px}")
 
         elif atype == "score_down" and aval is not None:
             sc2 = analyze(calc_rsi(c2), calc_macd(c2), calc_ema_cross(c2), calc_bb(c2), calc_spike(v2, c2))
             if sc2 <= int(aval):
-                send_telegram(f"📉 <b>SCORE BAJO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nScore ({atf}): {sc2:+d} (menor o igual a {aval})")
+                mark_sent(coin, alert_key)
+                send_telegram(f"📉 <b>SCORE BAJO — {coin}</b>\nScore ({atf.upper()}): {sc2:+d} ≤ {aval} — ${px}")
 
         elif atype == "obv_up":
             obv2 = calc_obv(v2, c2)
             if obv2 and obv2["trend"] == "up":
-                send_telegram(f"↑ <b>OBV ACUMULANDO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nOBV ({atf}) en tendencia alcista")
+                mark_sent(coin, alert_key)
+                send_telegram(f"↑ <b>OBV ACUM — {coin}</b>\nOBV ({atf.upper()}) alcista — ${px}")
 
         elif atype == "obv_down":
             obv2 = calc_obv(v2, c2)
             if obv2 and obv2["trend"] == "down":
-                send_telegram(f"↓ <b>OBV DISTRIBUYENDO — {coin}</b>\n<b>{coin}/USDT</b> — ${px}\nOBV ({atf}) en tendencia bajista")
+                mark_sent(coin, alert_key)
+                send_telegram(f"↓ <b>OBV DIST — {coin}</b>\nOBV ({atf.upper()}) bajista — ${px}")
 
-    # Return new state for this coin
-    return {"obv": obv_trend, "macd": macd_dir, "rsi": rsi, "score": score, "price": price}
+    # Save per-TF states for cross detection next run
+    new_state = {"price": price, "score": score_def,
+                 f"obv_{default_tf}": obv_trend_def,
+                 f"macd_{default_tf}": macd_dir_def,
+                 f"rsi_{default_tf}": rsi_def}
+    # Also save states for other TFs that were fetched
+    for tf, (c, v) in _tf_cache.items():
+        if c and tf != default_tf:
+            new_state[f"rsi_{tf}"]  = calc_rsi(c)
+            new_state[f"obv_{tf}"]  = (calc_obv(v, c) or {}).get("trend", "flat")
+            m = calc_macd(c)
+            new_state[f"macd_{tf}"] = "up" if m and m["up"] else "down" if m and m["down"] else "flat"
+
+    return new_state
 
 # ============ RUN ============
 

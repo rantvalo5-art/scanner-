@@ -1,13 +1,14 @@
 name: Crypto Scanner Bot
-
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # sigue funcionando para activar manualmente
+  schedule:
+    - cron: '*/5 * * * *'   # OPCIONAL: también corre solo cada 5 min
+                             # Si preferís seguir usando cron-job.org, borrá estas 2 líneas
 
 jobs:
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 4
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,7 +19,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests scikit-learn numpy   # ← agregado scikit-learn y numpy
 
       - name: Run scanner bot
         run: python scanner_bot.py

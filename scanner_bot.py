@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
-Crypto Signal Scanner Bot - VERSIÓN CORREGIDA
-Corre en PythonAnywhere cada X minutos
-Lee config desde Supabase, calcula indicadores, manda alertas a Telegram
+Crypto Signal Scanner Bot - VERSIÓN 7 ML ENHANCED
+===================================================
+✅ Basado en scanner_bot_6 (tu versión actual)
+✅ Agrega ML (RandomForest) para filtrar falsos positivos
+✅ Agrega Multi-Timeframe Confirmation (1H + 4H + 1D)
+✅ Agrega Confirmation Candles (persistido en Supabase)
+❌ WebSocket REMOVIDO (no funciona en GitHub Actions)
+   → Ya tienes fetch_realtime_price() que hace lo mismo via API REST
 
-CORRECCIONES:
-- Sistema de cooldown unificado usando SOLO Supabase
-- Claves de cooldown consistentes con el HTML
-- Cooldown de 30 minutos (en vez de 1 hora)
-- Precio en tiempo real para verificación de alertas
-- Validación mejorada de alertas
+DEPENDENCIAS NUEVAS (agregar al workflow .yml):
+  pip install scikit-learn numpy --break-system-packages
+
+NOTA: Si scikit-learn no está disponible, el bot corre igual
+      sin ML (modo degradado seguro).
 """
 
 import requests
@@ -17,6 +21,7 @@ import json
 import time
 import math
 from datetime import datetime
+from collections import defaultdict
 
 # ============ CONFIG ============
 SUPABASE_URL = "https://ecgdswroygkfckkaguxp.supabase.co"
@@ -31,14 +36,200 @@ SUPA_HEADERS = {
 }
 
 BINANCE_BASE = "https://api.binance.com/api/v3"
+COOLDOWN_SECONDS = 1800  # 30 minutos
 
-# NUEVO: Cooldown de 30 minutos (consistente con el HTML)
-COOLDOWN_SECONDS = 120  # 30 minutos = 1800 segundos
-
-# Global dict para cooldowns (se carga/guarda en Supabase)
+# Global dict para cooldowns
 SENT_ALERTS = {}
 
-# ============ MATH ============
+# ============ ML - IMPORTACIÓN SEGURA ============
+# Si no está instalado, el bot corre igual sin ML
+
+try:
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.preprocessing import StandardScaler
+    import numpy as np
+    ML_AVAILABLE = True
+    print("✅ scikit-learn disponible — ML habilitado")
+except ImportError:
+    ML_AVAILABLE = False
+    print("⚠️  scikit-learn no instalado — ML deshabilitado (bot funciona igual)")
+
+
+class CryptoMLPredictor:
+    """
+    Predictor ML que filtra señales ruidosas.
+    Entrenado con datos sintéticos en bootstrap.
+    En el futuro se puede reemplazar con datos reales históricos.
+    """
+
+    def __init__(self):
+        self.model = None
+        self.scaler = None
+        self.is_trained = False
+
+    def train(self):
+        """Entrena el modelo con datos sintéticos para bootstrap"""
+        if not ML_AVAILABLE:
+            return False
+
+        print("🤖 Entrenando modelo ML...")
+
+        X_train = []
+        y_train = []
+
+        rng = np.random.default_rng(42)  # Seed fijo para reproducibilidad
+
+        for _ in range(1000):
+            rsi      = rng.uniform(0, 100)
+            macd_h   = rng.uniform(-2, 2)
+            ema_bull = rng.choice([0, 1])
+            bb_pct   = rng.uniform(0, 1)
+            spike_r  = rng.uniform(0.5, 3)
+            obv_up   = rng.choice([0, 1])
+            momentum = rng.uniform(-0.1, 0.1)
+            volatil  = rng.uniform(0, 0.1)
+
+            features = [rsi, macd_h, ema_bull, bb_pct, spike_r, obv_up, momentum, volatil]
+
+            # Label: alcista si RSI bajo + OBV acumulando + momentum positivo
+            label = 1 if (rsi < 35 and obv_up == 1 and momentum > 0) else 0
+
+            X_train.append(features)
+            y_train.append(label)
+
+        X = np.array(X_train)
+        y = np.array(y_train)
+
+        self.scaler = StandardScaler()
+        X_scaled = self.scaler.fit_transform(X)
+
+        self.model = RandomForestClassifier(
+            n_estimators=100,
+            max_depth=10,
+            random_state=42
+        )
+        self.model.fit(X_scaled, y)
+        self.is_trained = True
+        print("✅ Modelo ML entrenado")
+        return True
+
+    def predict(self, closes, vols, rsi, macd, ema_cross, bb, spike, obv):
+        """
+        Predice probabilidad de movimiento alcista.
+        Retorna float entre 0 y 1. Default 0.5 si no hay modelo.
+        """
+        if not self.is_trained or not ML_AVAILABLE:
+            return 0.5
+
+        try:
+            momentum = (closes[-1] - closes[-5]) / closes[-5] if len(closes) >= 5 else 0
+            volatil  = float(np.std(closes[-20:]) / np.mean(closes[-20:])) if len(closes) >= 20 else 0
+
+            features = [
+                rsi if rsi is not None else 50,
+                macd["h"] if macd else 0,
+                1 if ema_cross and ema_cross["bullish"] else 0,
+                bb["pct"] if bb else 0.5,
+                spike["ratio"] if spike else 1,
+                1 if obv and obv["trend"] == "up" else 0,
+                momentum,
+                volatil,
+            ]
+
+            X = self.scaler.transform([features])
+            prob = self.model.predict_proba(X)[0][1]
+            return float(prob)
+        except Exception as e:
+            print(f"  ⚠️ ML predict error: {e}")
+            return 0.5
+
+
+# Instancia global del predictor
+ml_predictor = CryptoMLPredictor()
+
+
+# ============ CONFIRMATION CANDLES (persistido en Supabase) ============
+# Usamos Supabase para persistir el estado entre runs de GitHub Actions
+# (en memoria sería inútil porque cada run es un proceso nuevo)
+
+def load_confirmation_state():
+    """Carga estado de confirmaciones desde Supabase"""
+    try:
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/confirmation_state?id=eq.default",
+            headers=SUPA_HEADERS,
+            timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if data and "state" in data[0]:
+                return data[0]["state"] or {}
+    except Exception as e:
+        print(f"  ⚠️ No se pudo cargar confirmation_state: {e}")
+    return {}
+
+
+def save_confirmation_state(state_dict):
+    """Guarda estado de confirmaciones en Supabase"""
+    try:
+        r = requests.post(
+            f"{SUPABASE_URL}/rest/v1/confirmation_state",
+            headers=SUPA_HEADERS,
+            json={"id": "default", "state": state_dict, "updated_at": datetime.now().isoformat()},
+            timeout=10
+        )
+        if r.status_code not in [200, 201]:
+            requests.patch(
+                f"{SUPABASE_URL}/rest/v1/confirmation_state?id=eq.default",
+                headers=SUPA_HEADERS,
+                json={"state": state_dict, "updated_at": datetime.now().isoformat()},
+                timeout=10
+            )
+    except Exception as e:
+        print(f"  ⚠️ No se pudo guardar confirmation_state: {e}")
+
+
+def check_confirmation(conf_state, coin, signal_type, current_signal, required=2):
+    """
+    Verifica si una señal se confirmó N veces consecutivas.
+    Modifica conf_state in-place.
+
+    Args:
+        conf_state: dict cargado de Supabase (se modifica)
+        coin: "BTC"
+        signal_type: "strong", "mr", etc
+        current_signal: True/False
+        required: cuántas veces consecutivas se necesita (default 2)
+
+    Returns:
+        bool: True si confirmado
+    """
+    key = f"{coin}_{signal_type}"
+    now = time.time()
+
+    entry = conf_state.get(key, {"count": 0, "signal": None, "last_check": 0})
+
+    # Si pasó más de 20 minutos desde el último check, resetear
+    if now - entry.get("last_check", 0) > 1200:
+        entry = {"count": 0, "signal": None, "last_check": 0}
+
+    entry["last_check"] = now
+
+    if current_signal:
+        if entry.get("signal") == True:
+            entry["count"] = entry.get("count", 0) + 1
+        else:
+            entry["signal"] = True
+            entry["count"] = 1
+    else:
+        entry["count"] = 0
+        entry["signal"] = None
+
+    conf_state[key] = entry
+    return entry["count"] >= required
+
+
+# ============ MATH (igual que v6) ============
 
 def ema(prices, period):
     k = 2 / (period + 1)
@@ -149,15 +340,54 @@ def fmt_price(p):
     return f"{p:,.2f}"
 
 def fmt_target(p, target_str=None):
-    """Use exact string if available, otherwise fmt_price"""
     if target_str:
         return target_str
     return fmt_price(p)
 
-# ============ BINANCE ============
+
+# ============ MULTI-TIMEFRAME CONFIRMATION ============
+
+def check_multi_tf(coin, default_tf, required_positive=2, min_score=2):
+    """
+    Verifica alineación en múltiples timeframes.
+    
+    Args:
+        coin: "BTC"
+        default_tf: el TF principal del config ("4h", "1h", etc)
+        required_positive: cuántos TFs deben tener score >= min_score
+        min_score: score mínimo para considerar un TF como "positivo"
+    
+    Returns:
+        (confirmed: bool, scores: dict)
+    """
+    # Siempre incluye el TF principal + los estándar
+    timeframes = list(dict.fromkeys(["1h", "4h", "1d", default_tf]))
+    scores = {}
+
+    for tf in timeframes:
+        closes, vols = fetch_klines(coin, tf, 100)
+        if not closes:
+            continue
+        rsi   = calc_rsi(closes)
+        macd  = calc_macd(closes)
+        em    = calc_ema_cross(closes)
+        bb    = calc_bb(closes)
+        spike = calc_spike(vols, closes)
+        scores[tf] = analyze(rsi, macd, em, bb, spike)
+
+    if len(scores) < 2:
+        # No hay suficientes datos para confirmar → no bloquear, dejar pasar
+        return True, scores
+
+    positive = sum(1 for s in scores.values() if s >= min_score)
+    confirmed = positive >= required_positive
+    return confirmed, scores
+
+
+# ============ BINANCE / EXCHANGES ============
 
 def fetch_realtime_price(symbol):
-    """Fetch real-time price from Binance only — single source of truth"""
+    """Precio en tiempo real desde Binance REST API"""
     try:
         url = f"{BINANCE_BASE}/ticker/price"
         params = {"symbol": f"{symbol}USDT"}
@@ -166,11 +396,12 @@ def fetch_realtime_price(symbol):
             data = r.json()
             if "price" in data:
                 return float(data["price"])
-    except: pass
+    except:
+        pass
     return None
 
 def fetch_klines(symbol, interval="4h", limit=100):
-    # 1. Try Binance global
+    # 1. Binance global
     try:
         url = f"{BINANCE_BASE}/klines"
         params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit + 1}
@@ -178,9 +409,10 @@ def fetch_klines(symbol, interval="4h", limit=100):
         if r.status_code == 200:
             rows = r.json()[:-1]
             return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
-    except: pass
+    except:
+        pass
 
-    # 2. OKX — works from GitHub Actions
+    # 2. OKX — funciona desde GitHub Actions
     try:
         interval_map = {"1h": "1H", "4h": "4H", "1d": "1D"}
         okx_bar = interval_map.get(interval, "4H")
@@ -197,12 +429,10 @@ def fetch_klines(symbol, interval="4h", limit=100):
         vols   = [float(row[7]) for row in rows]
         return closes, vols
     except Exception as e:
-        if "OKX error" in str(e):
-            pass  # pair not found on OKX, try KuCoin
-        else:
-            raise
+        if "OKX error" not in str(e):
+            pass
 
-    # 3. KuCoin fallback — for coins not on OKX (e.g. DEXE)
+    # 3. KuCoin
     try:
         interval_map_kc = {"1h": "1hour", "4h": "4hour", "1d": "1day"}
         kc_interval = interval_map_kc.get(interval, "4hour")
@@ -217,10 +447,10 @@ def fetch_klines(symbol, interval="4h", limit=100):
         closes = [float(row[2]) for row in rows]
         vols   = [float(row[6]) for row in rows]
         return closes, vols
-    except Exception as e:
-        pass  # KuCoin failed, try Gate.io
+    except:
+        pass
 
-    # 4. Gate.io — last resort for exotic pairs like COS
+    # 4. Gate.io
     try:
         interval_map_gate = {"1h": "1h", "4h": "4h", "1d": "1d"}
         gate_interval = interval_map_gate.get(interval, "4h")
@@ -232,15 +462,15 @@ def fetch_klines(symbol, interval="4h", limit=100):
         closes = [float(row[2]) for row in rows]
         vols   = [float(row[1]) for row in rows]
         return closes, vols
-    except Exception as e:
+    except:
         pass
 
     return None, None
 
-# ============ SUPABASE — SISTEMA DE COOLDOWN UNIFICADO ============
+
+# ============ SUPABASE ============
 
 def load_sent_alerts():
-    """NUEVO: Carga cooldowns desde Supabase - consistente con localStorage del HTML"""
     try:
         r = requests.get(
             f"{SUPABASE_URL}/rest/v1/alert_cooldowns?id=eq.default",
@@ -252,47 +482,31 @@ def load_sent_alerts():
             if data and len(data) > 0 and "cooldowns" in data[0]:
                 cooldowns = data[0]["cooldowns"]
                 if isinstance(cooldowns, dict):
-                    print(f"  ✅ Loaded {len(cooldowns)} cooldowns from Supabase")
+                    print(f"  ✅ {len(cooldowns)} cooldowns cargados")
                     return cooldowns
     except Exception as e:
-        print(f"  ⚠️ Could not load cooldowns: {e}")
+        print(f"  ⚠️ No se pudo cargar cooldowns: {e}")
     return {}
 
 def save_sent_alerts():
-    """NUEVO: Guarda cooldowns en Supabase - consistente con localStorage del HTML"""
     try:
-        # Clean old entries (older than 30 minutes)
         now_ts = time.time()
         cleaned = {k: v for k, v in SENT_ALERTS.items() if now_ts - v < COOLDOWN_SECONDS}
-        
         r = requests.post(
             f"{SUPABASE_URL}/rest/v1/alert_cooldowns",
             headers=SUPA_HEADERS,
-            json={
-                "id": "default",
-                "cooldowns": cleaned,
-                "updated_at": datetime.now().isoformat()
-            },
+            json={"id": "default", "cooldowns": cleaned, "updated_at": datetime.now().isoformat()},
             timeout=10
         )
-        if r.status_code in [200, 201]:
-            print(f"  ✅ Saved {len(cleaned)} cooldowns to Supabase")
-            return
-        
-        # If insert failed, try update
-        r = requests.patch(
-            f"{SUPABASE_URL}/rest/v1/alert_cooldowns?id=eq.default",
-            headers=SUPA_HEADERS,
-            json={
-                "cooldowns": cleaned,
-                "updated_at": datetime.now().isoformat()
-            },
-            timeout=10
-        )
-        if r.status_code == 200:
-            print(f"  ✅ Updated {len(cleaned)} cooldowns in Supabase")
+        if r.status_code not in [200, 201]:
+            requests.patch(
+                f"{SUPABASE_URL}/rest/v1/alert_cooldowns?id=eq.default",
+                headers=SUPA_HEADERS,
+                json={"cooldowns": cleaned, "updated_at": datetime.now().isoformat()},
+                timeout=10
+            )
     except Exception as e:
-        print(f"  ⚠️ Could not save cooldowns: {e}")
+        print(f"  ⚠️ No se pudo guardar cooldowns: {e}")
 
 def load_state():
     r = requests.get(
@@ -319,7 +533,8 @@ def load_prev_state():
                 states = data[0]["states"]
                 if isinstance(states, dict):
                     return states
-    except: pass
+    except:
+        pass
     return {}
 
 def save_prev_state(states):
@@ -331,7 +546,7 @@ def save_prev_state(states):
             timeout=10
         )
         if r.status_code not in [200, 201]:
-            r = requests.patch(
+            requests.patch(
                 f"{SUPABASE_URL}/rest/v1/prev_state?id=eq.default",
                 headers=SUPA_HEADERS,
                 json={"states": states, "updated_at": datetime.now().isoformat()},
@@ -347,41 +562,48 @@ def send_telegram(msg):
             json={"chat_id": TG_CHAT, "text": msg, "parse_mode": "HTML"},
             timeout=10
         )
-    except: pass
+    except:
+        pass
 
-# ============ COOLDOWN MANAGEMENT ============
+
+# ============ COOLDOWN ============
 
 def can_send(coin, trigger):
-    """NUEVO: Verificación de cooldown usando claves consistentes con el HTML"""
     key = f"{coin}_{trigger}"
     now = time.time()
     if key in SENT_ALERTS:
-        elapsed = now - SENT_ALERTS[key]
-        if elapsed < COOLDOWN_SECONDS:
+        if now - SENT_ALERTS[key] < COOLDOWN_SECONDS:
             return False
     return True
 
 def mark_sent(coin, trigger):
-    """NUEVO: Marca alerta como enviada con timestamp actual"""
     key = f"{coin}_{trigger}"
     SENT_ALERTS[key] = time.time()
 
+
 # ============ CHECK COIN ============
 
-def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states):
+def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states,
+               conf_state, use_ml=True, use_mtf=True, use_confirmation=True,
+               ml_threshold=0.65, mtf_required=2):
     """
-    MEJORADO: Sistema de alertas con cooldown unificado y precios en tiempo real
+    VERSIÓN 7: Análisis completo con ML + Multi-TF + Confirmation Candles.
+
+    Parámetros de configuración:
+        use_ml:          Habilitar filtro ML (default True)
+        use_mtf:         Habilitar Multi-Timeframe (default True)
+        use_confirmation: Habilitar confirmation candles (default True)
+        ml_threshold:    Probabilidad mínima ML para pasar (default 0.65)
+        mtf_required:    Nº de TFs con score >= 2 para confirmar (default 2)
     """
     print(f"\n🔍 {coin}")
-    
-    # Get global thresholds with defaults
+
     def gv(key, default):
         gt = global_triggers.get(key, {})
         if isinstance(gt, dict):
             return gt.get("val", default)
         return default
 
-    # Helper to fetch data for any timeframe
     _tf_cache = {}
     def get_data(tf):
         if tf in _tf_cache:
@@ -392,86 +614,139 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states):
 
     closes, vols = get_data(default_tf)
     if not closes:
-        print(f"  ❌ No data")
+        print(f"  ❌ Sin datos")
         return None
 
-    # NUEVO: Obtener precio en tiempo real para alertas más precisas
+    # Precio en tiempo real
     realtime_price = fetch_realtime_price(coin)
     price = realtime_price if realtime_price else closes[-1]
-    
-    print(f"  💰 Real-time price: ${fmt_price(price)}")
+    print(f"  💰 Precio: ${fmt_price(price)}")
 
-    # Calculate indicators on default TF
-    rsi_def = calc_rsi(closes)
+    # Indicadores
+    rsi_def  = calc_rsi(closes)
     macd_def = calc_macd(closes)
-    ema_def = calc_ema_cross(closes)
-    bb_def = calc_bb(closes)
+    ema_def  = calc_ema_cross(closes)
+    bb_def   = calc_bb(closes)
     spike_def = calc_spike(vols, closes)
-    obv_def = calc_obv(vols, closes)
+    obv_def  = calc_obv(vols, closes)
 
-    score_def = analyze(rsi_def, macd_def, ema_def, bb_def, spike_def)
+    score_def     = analyze(rsi_def, macd_def, ema_def, bb_def, spike_def)
     obv_trend_def = obv_def["trend"] if obv_def else "flat"
-    
-    macd_dir_def = "up" if macd_def and macd_def["up"] else "down" if macd_def and macd_def["down"] else "flat"
+    macd_dir_def  = "up" if macd_def and macd_def["up"] else "down" if macd_def and macd_def["down"] else "flat"
+
+    # ── ML PREDICTION ──────────────────────────────────────────────
+    ml_prob = 0.5
+    ml_info = ""
+    if use_ml and ml_predictor.is_trained:
+        ml_prob = ml_predictor.predict(closes, vols, rsi_def, macd_def, ema_def, bb_def, spike_def, obv_def)
+        trend_label = "🟢 alcista" if ml_prob >= 0.65 else "🟡 neutral" if ml_prob >= 0.50 else "🔴 bajista"
+        ml_info = f"\n🤖 ML: {ml_prob:.0%} {trend_label}"
+        print(f"  🤖 ML: {ml_prob:.1%} probabilidad alcista")
+
+    # ── MULTI-TIMEFRAME ─────────────────────────────────────────────
+    mtf_confirmed = True  # por defecto pasa
+    mtf_info = ""
+    if use_mtf:
+        mtf_confirmed, mtf_scores = check_multi_tf(coin, default_tf, required_positive=mtf_required)
+        scores_str = " ".join([f"{tf.upper()}:{s:+d}" for tf, s in mtf_scores.items()])
+        mtf_info = f"\n📊 Multi-TF: {scores_str}"
+        status = "✅ Alineado" if mtf_confirmed else "❌ No alineado"
+        print(f"  📊 Multi-TF: {scores_str} → {status}")
 
     tf_tag = f"[{default_tf.upper()}]"
     px = fmt_price(price)
 
-    # Load previous state for cross detection
     prev = prev_states.get(coin, {})
-    prev_obv = prev.get(f"obv_{default_tf}", "flat")
+    prev_obv  = prev.get(f"obv_{default_tf}", "flat")
     prev_macd = prev.get(f"macd_{default_tf}", "flat")
 
-    # Check global triggers
+    # ── TRIGGERS ────────────────────────────────────────────────────
     for trigger, enabled in global_triggers.items():
         if not isinstance(enabled, dict):
             enabled = {"on": enabled}
-        
-        # Skip if not enabled globally AND not enabled per-coin
+
         if not enabled.get("on") and not (coin_triggers.get(coin, {}).get(trigger)):
             continue
 
-        # NUEVO: Verificar cooldown antes de enviar cualquier alerta
         if not can_send(coin, trigger):
             continue
 
         spike_r = spike_def["ratio"] if spike_def else 0
-        
-        # Process each trigger type
-        if trigger == "spike" and spike_r > gv("spike", 1.5):
-            mark_sent(coin, trigger)
-            send_telegram(f"⚡ <b>VOLUME SPIKE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x promedio {tf_tag}")
+        current_signal = False
+        signal_msg = ""
 
-        elif trigger == "spike_green" and spike_r > gv("spike_green", 2.0) and spike_def.get("up"):
-            mark_sent(coin, trigger)
-            send_telegram(f"⚡ <b>SPIKE VERDE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x + vela verde 🔥 {tf_tag}")
+        # ── Evaluar señal ──
+        if trigger == "spike" and spike_r > gv("spike", 1.5):
+            current_signal = True
+            signal_msg = f"⚡ <b>VOLUME SPIKE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x promedio {tf_tag}"
+
+        elif trigger == "spike_green" and spike_r > gv("spike_green", 2.0) and spike_def and spike_def.get("up"):
+            current_signal = True
+            signal_msg = f"⚡ <b>SPIKE VERDE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x + vela verde 🔥 {tf_tag}"
 
         elif trigger == "macd_up" and macd_dir_def == "up" and prev_macd != "up":
-            mark_sent(coin, trigger)
-            send_telegram(f"📊 <b>MACD CRUCE ALCISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó positivo ✅ {tf_tag}")
+            current_signal = True
+            signal_msg = f"📊 <b>MACD CRUCE ALCISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó positivo ✅ {tf_tag}"
 
         elif trigger == "macd_down" and macd_dir_def == "down" and prev_macd != "down":
-            mark_sent(coin, trigger)
-            send_telegram(f"📊 <b>MACD CRUCE BAJISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó negativo ⚠️ {tf_tag}")
+            current_signal = True
+            signal_msg = f"📊 <b>MACD CRUCE BAJISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó negativo ⚠️ {tf_tag}"
 
         elif trigger == "mr" and rsi_def is not None and rsi_def < gv("mr", 35) and obv_trend_def == "up":
-            mark_sent(coin, trigger)
-            send_telegram(f"🔥 <b>MEAN REVERSION</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi_def:.1f} + OBV↑ Puntaje: {score_def:+d} {tf_tag}")
+            current_signal = True
+            signal_msg = f"🔥 <b>MEAN REVERSION</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi_def:.1f} + OBV↑ Puntaje: {score_def:+d} {tf_tag}"
 
         elif trigger == "ob" and rsi_def is not None and rsi_def > gv("ob", 70) and obv_trend_def == "down":
-            mark_sent(coin, trigger)
-            send_telegram(f"🚨 <b>OVERBOUGHT COMBO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi_def:.1f} + OBV↓ {tf_tag}")
+            current_signal = True
+            signal_msg = f"🚨 <b>OVERBOUGHT COMBO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi_def:.1f} + OBV↓ {tf_tag}"
 
         elif trigger == "strong" and score_def >= gv("strong", 4):
-            mark_sent(coin, trigger)
+            current_signal = True
             rsi_str = f"{rsi_def:.1f}" if rsi_def else "—"
-            send_telegram(f"💎 <b>STRONG BUY</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score_def:+d}/+5</b> RSI: {rsi_str} {tf_tag}")
+            signal_msg = f"💎 <b>STRONG BUY</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score_def:+d}/+5</b> RSI: {rsi_str} {tf_tag}"
 
         elif trigger == "sell" and score_def <= gv("sell", -4):
-            mark_sent(coin, trigger)
-            send_telegram(f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score_def}/-5</b> {tf_tag}")
+            current_signal = True
+            signal_msg = f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score_def}/-5</b> {tf_tag}"
 
-    # ---- Individual indicator alerts per coin ----
+        if not current_signal:
+            if use_confirmation:
+                # Resetear contador si la señal desapareció
+                check_confirmation(conf_state, coin, trigger, False)
+            continue
+
+        # ── Filtros nuevos (solo si la señal está activa) ──
+
+        # 1. Confirmation Candles
+        if use_confirmation:
+            confirmed_candles = check_confirmation(conf_state, coin, trigger, True)
+            count = conf_state.get(f"{coin}_{trigger}", {}).get("count", 1)
+            if not confirmed_candles:
+                print(f"  ⏳ {trigger}: esperando confirmación ({count}/2)")
+                continue
+
+        # 2. ML Filter
+        if use_ml and ml_predictor.is_trained:
+            if ml_prob < ml_threshold:
+                print(f"  🚫 {trigger}: ML bloqueó ({ml_prob:.0%} < {ml_threshold:.0%})")
+                continue
+
+        # 3. Multi-TF Filter
+        if use_mtf and not mtf_confirmed:
+            print(f"  🚫 {trigger}: Multi-TF no alineado")
+            continue
+
+        # ── Agregar info extra al mensaje ──
+        extra = ml_info + mtf_info
+        if extra:
+            signal_msg += extra
+
+        # ✅ Todo pasó → enviar alerta
+        mark_sent(coin, trigger)
+        send_telegram(signal_msg)
+        print(f"  ✅ {trigger}: alerta enviada")
+
+    # ── Alertas por indicadores individuales (per-coin) ──
     ct = coin_triggers.get(coin, {})
     ind_alerts = ct.get("ind_alerts", [])
     if not isinstance(ind_alerts, list):
@@ -524,13 +799,19 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states):
                 mark_sent(coin, alert_key)
                 send_telegram(f"↓ <b>OBV DIST — {coin}</b>\nOBV ({atf.upper()}) bajista — ${px}")
 
-    # Save per-TF states for cross detection next run
-    new_state = {"price": price, "score": score_def,
-                 f"obv_{default_tf}": obv_trend_def,
-                 f"macd_{default_tf}": macd_dir_def,
-                 f"rsi_{default_tf}": rsi_def}
-    # Also save states for other TFs that were fetched
-    for tf, (c, v) in _tf_cache.items():
+    # Guardar estados por TF
+    new_state = {
+        "price": price,
+        "score": score_def,
+        f"obv_{default_tf}": obv_trend_def,
+        f"macd_{default_tf}": macd_dir_def,
+        f"rsi_{default_tf}": rsi_def,
+    }
+    if use_ml and ml_predictor.is_trained:
+        new_state["ml_prob"] = round(ml_prob, 3)
+
+    _tf_cache_local = _tf_cache
+    for tf, (c, v) in _tf_cache_local.items():
         if c and tf != default_tf:
             new_state[f"rsi_{tf}"]  = calc_rsi(c)
             new_state[f"obv_{tf}"]  = (calc_obv(v, c) or {}).get("trend", "flat")
@@ -539,15 +820,28 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states):
 
     return new_state
 
+
 # ============ RUN ============
 
 def run():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"\n{'='*50}")
-    print(f"🤖 Scanner Bot (FIXED) — {now}")
-    print(f"{'='*50}")
+    print(f"\n{'='*55}")
+    print(f"🚀 Scanner Bot v7 ML Enhanced — {now}")
+    print(f"{'='*55}")
 
-    # Load state from Supabase
+    # ── Entrenar ML ──────────────────────────────────────────────
+    if ML_AVAILABLE and not ml_predictor.is_trained:
+        ml_predictor.train()
+
+    use_ml   = ml_predictor.is_trained  # False si scikit-learn no está instalado
+    use_mtf  = True
+    use_conf = True
+
+    print(f"🤖 ML:            {'✅ ON' if use_ml else '❌ OFF (instala scikit-learn)'}")
+    print(f"📊 Multi-TF:      {'✅ ON' if use_mtf else '❌ OFF'}")
+    print(f"⏳ Confirmation:  {'✅ ON' if use_conf else '❌ OFF'}")
+
+    # ── Cargar estado de Supabase ────────────────────────────────
     try:
         state = load_state()
     except Exception as e:
@@ -555,28 +849,36 @@ def run():
         return
 
     if not state:
-        print("❌ No state found in Supabase. Run the scanner HTML first to set up.")
+        print("❌ Sin estado en Supabase. Abre el HTML primero para configurar.")
         return
 
     coins = state.get("coins") or []
     if not coins:
-        print("⚠️  No coins configured. Add coins in the scanner first.")
+        print("⚠️  Sin monedas configuradas.")
         return
 
-    # NUEVO: Load sent alerts from Supabase to maintain cooldown across executions
     global SENT_ALERTS
     SENT_ALERTS = load_sent_alerts()
-    
-    # Clean old entries (older than 30 minutes)
+
+    # Limpiar cooldowns vencidos
     now_ts = time.time()
     SENT_ALERTS = {k: v for k, v in SENT_ALERTS.items() if now_ts - v < COOLDOWN_SECONDS}
-    print(f"🕐 Loaded {len(SENT_ALERTS)} active cooldowns (30 min window)")
+    print(f"🕐 {len(SENT_ALERTS)} cooldowns activos")
 
-    timeframe = state.get("timeframe", "4h")
+    # Cargar estado de confirmation candles desde Supabase
+    conf_state = load_confirmation_state() if use_conf else {}
 
+    timeframe  = state.get("timeframe", "4h")
     raw_global = state.get("global_triggers") or {}
     raw_coin   = state.get("coin_triggers") or {}
     raw_alerts = state.get("alerts") or {}
+
+    for field_name, field in [("raw_global", raw_global), ("raw_coin", raw_coin), ("raw_alerts", raw_alerts)]:
+        if isinstance(field, str):
+            try:
+                locals()[field_name] = json.loads(field)
+            except:
+                locals()[field_name] = {}
 
     if isinstance(raw_global, str):
         try: raw_global = json.loads(raw_global)
@@ -590,76 +892,82 @@ def run():
 
     prev_states = load_prev_state()
 
-    print(f"📊 Coins: {coins}")
+    print(f"📊 Monedas: {coins}")
     print(f"⏱  Timeframe: {timeframe}")
-    print(f"🔔 Active global triggers: {[k for k,v in raw_global.items() if (v.get('on') if isinstance(v,dict) else v)]}")
-    if raw_alerts:
-        print(f"💰 Price alerts: {list(raw_alerts.keys())}")
+    active_triggers = [k for k, v in raw_global.items() if (v.get('on') if isinstance(v, dict) else v)]
+    print(f"🔔 Triggers activos: {active_triggers}")
 
-    alerts_triggered = []
     new_states = {}
 
     for coin in coins:
-        new_state = check_coin(coin, timeframe, raw_global, raw_coin, prev_states)
+        new_state = check_coin(
+            coin, timeframe, raw_global, raw_coin, prev_states,
+            conf_state,
+            use_ml=use_ml,
+            use_mtf=use_mtf,
+            use_confirmation=use_conf,
+            ml_threshold=0.65,
+            mtf_required=2,
+        )
         if new_state:
             new_states[coin] = new_state
 
-        # MEJORADO: Check price alerts using real-time price
+        # ── Alertas de precio ────────────────────────────────────
         if coin in raw_alerts and new_state:
             try:
                 current_price = fetch_realtime_price(coin)
                 if current_price is None:
-                    current_price = new_state.get("price")  # fallback to candle price
-                
-                print(f"  💰 {coin} checking price alerts at ${fmt_price(current_price)}")
-                
+                    current_price = new_state.get("price")
+
+                print(f"  💰 {coin} precio actual: ${fmt_price(current_price)}")
+
                 coin_alerts = raw_alerts[coin]
                 if isinstance(coin_alerts, dict):
                     coin_alerts = [coin_alerts]
-                
+
                 for alert in coin_alerts:
-                    target = float(alert.get("target", 0))
+                    target    = float(alert.get("target", 0))
                     direction = alert.get("dir", "")
-                    
-                    # Check if alert condition is met
+
                     hit = (direction == "below" and current_price <= target) or \
                           (direction == "above" and current_price >= target)
-                    
-                    # NUEVO: Clave de cooldown consistente con el HTML
+
                     alert_key = f"{direction}_{target}"
-                    
+
                     if hit and can_send(coin, alert_key):
                         mark_sent(coin, alert_key)
                         arrow = "↓" if direction == "below" else "↑"
                         label = "bajó de" if direction == "below" else "subió a"
                         target_str = alert.get("targetStr", None)
-                        
-                        print(f"  ✅ Price alert triggered: {coin} {arrow} ${fmt_target(target, target_str)}")
-                        
+
+                        print(f"  ✅ Alerta de precio: {coin} {arrow} ${fmt_target(target, target_str)}")
                         send_telegram(
                             f"💰 <b>ALERTA DE PRECIO</b>\n"
                             f"<b>{coin}/USDT</b>\n"
                             f"Precio actual: ${fmt_price(current_price)}\n"
                             f"{arrow} {label} ${fmt_target(target, target_str)}"
                         )
-                
             except Exception as e:
-                print(f"  ⚠️ Price alert check error for {coin}: {e}")
+                print(f"  ⚠️ Error alerta precio {coin}: {e}")
 
-        time.sleep(1.0)  # avoid rate limiting
+        time.sleep(1.0)
 
-    # NUEVO: Save sent alerts to Supabase for cooldown persistence
+    # ── Guardar todo en Supabase ──────────────────────────────────
     save_sent_alerts()
 
-    # Save new states back to Supabase
+    if use_conf:
+        save_confirmation_state(conf_state)
+        print(f"\n✅ Confirmation state guardado ({len(conf_state)} entradas)")
+
     try:
         save_prev_state(new_states)
-        print(f"\n✅ States saved to Supabase")
+        print(f"✅ Estados guardados en Supabase")
     except Exception as e:
-        print(f"⚠️  Could not save states: {e}")
+        print(f"⚠️  No se pudo guardar estados: {e}")
 
-    print(f"\n✅ Done — checked {len(coins)} coins")
-    print(f"📊 Total cooldowns active: {len(SENT_ALERTS)}")
+    print(f"\n✅ Done — {len(coins)} monedas procesadas")
+    print(f"📊 Cooldowns activos: {len(SENT_ALERTS)}")
+
 
 if __name__ == "__main__":
     run()

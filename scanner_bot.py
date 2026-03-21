@@ -68,7 +68,15 @@ class CryptoMLPredictor:
         self.is_trained = False
 
     def train(self):
-        """Entrena el modelo con datos sintéticos para bootstrap"""
+        """
+        Entrena el modelo con datos sintéticos balanceados.
+        
+        PROBLEMA ANTERIOR: el label era muy restrictivo (solo RSI<35 + OBV + momentum>0)
+        lo que generaba ~5% de casos positivos. El modelo aprendía a decir "bajista" 
+        siempre y daba 0-7% de probabilidad a todo.
+        
+        SOLUCIÓN: dataset balanceado 50/50 con múltiples condiciones alcistas realistas.
+        """
         if not ML_AVAILABLE:
             return False
 
@@ -77,22 +85,29 @@ class CryptoMLPredictor:
         X_train = []
         y_train = []
 
-        rng = np.random.default_rng(42)  # Seed fijo para reproducibilidad
+        rng = np.random.default_rng(42)
 
-        for _ in range(1000):
+        for _ in range(2000):
             rsi      = rng.uniform(0, 100)
             macd_h   = rng.uniform(-2, 2)
             ema_bull = rng.choice([0, 1])
             bb_pct   = rng.uniform(0, 1)
             spike_r  = rng.uniform(0.5, 3)
             obv_up   = rng.choice([0, 1])
-            momentum = rng.uniform(-0.1, 0.1)
-            volatil  = rng.uniform(0, 0.1)
+            momentum = rng.uniform(-0.15, 0.15)
+            volatil  = rng.uniform(0, 0.15)
 
             features = [rsi, macd_h, ema_bull, bb_pct, spike_r, obv_up, momentum, volatil]
 
-            # Label: alcista si RSI bajo + OBV acumulando + momentum positivo
-            label = 1 if (rsi < 35 and obv_up == 1 and momentum > 0) else 0
+            # Señales alcistas: cualquiera de estas combinaciones cuenta
+            cond_oversold   = rsi < 35 and obv_up == 1                  # RSI bajo + acumulación
+            cond_momentum   = momentum > 0.03 and ema_bull == 1          # momentum + EMA alcista
+            cond_bb_bounce  = bb_pct < 0.2 and macd_h > 0               # rebote en BB inferior
+            cond_spike_bull = spike_r > 2.0 and obv_up == 1             # spike con volumen
+            cond_macd_bull  = macd_h > 0.5 and ema_bull == 1            # MACD fuerte + EMA
+
+            label = 1 if any([cond_oversold, cond_momentum, cond_bb_bounce,
+                              cond_spike_bull, cond_macd_bull]) else 0
 
             X_train.append(features)
             y_train.append(label)
@@ -100,12 +115,17 @@ class CryptoMLPredictor:
         X = np.array(X_train)
         y = np.array(y_train)
 
+        # Verificar balance (debería ser ~40-60% positivos)
+        pct_pos = y.mean() * 100
+        print(f"  📊 Dataset: {len(y)} muestras, {pct_pos:.0f}% alcistas")
+
         self.scaler = StandardScaler()
         X_scaled = self.scaler.fit_transform(X)
 
         self.model = RandomForestClassifier(
             n_estimators=100,
-            max_depth=10,
+            max_depth=8,
+            class_weight='balanced',  # compensa cualquier desbalance residual
             random_state=42
         )
         self.model.fit(X_scaled, y)
@@ -351,17 +371,31 @@ def check_multi_tf(coin, default_tf, required_positive=2, min_score=2):
     """
     Verifica alineación en múltiples timeframes.
     
-    Args:
-        coin: "BTC"
-        default_tf: el TF principal del config ("4h", "1h", etc)
-        required_positive: cuántos TFs deben tener score >= min_score
-        min_score: score mínimo para considerar un TF como "positivo"
+    Se adapta al timeframe principal configurado:
+    - Si usás 5m → chequea 5m + 15m + 1h  (TFs cercanos, tiene sentido)
+    - Si usás 1h → chequea 1h + 4h + 1d   (TFs clásicos)
+    - Si usás 4h → chequea 4h + 1d         (TFs macro)
+    
+    Con 5m es INCORRECTO pedir alineación en 4H y 1D porque son tendencias
+    completamente distintas al scalping de 5 minutos.
     
     Returns:
         (confirmed: bool, scores: dict)
     """
-    # Siempre incluye el TF principal + los estándar
-    timeframes = list(dict.fromkeys(["1h", "4h", "1d", default_tf]))
+    # Mapa de TFs relevantes según el TF principal
+    tf_groups = {
+        "1m":  ["1m", "5m", "15m"],
+        "3m":  ["3m", "15m", "1h"],
+        "5m":  ["5m", "15m", "1h"],
+        "15m": ["15m", "1h", "4h"],
+        "30m": ["30m", "1h", "4h"],
+        "1h":  ["1h", "4h", "1d"],
+        "2h":  ["2h", "4h", "1d"],
+        "4h":  ["4h", "1d"],
+        "1d":  ["1d"],
+    }
+
+    timeframes = tf_groups.get(default_tf, ["1h", "4h", "1d"])
     scores = {}
 
     for tf in timeframes:
@@ -376,11 +410,14 @@ def check_multi_tf(coin, default_tf, required_positive=2, min_score=2):
         scores[tf] = analyze(rsi, macd, em, bb, spike)
 
     if len(scores) < 2:
-        # No hay suficientes datos para confirmar → no bloquear, dejar pasar
+        # Solo hay 1 TF disponible → no bloquear, dejar pasar
         return True, scores
 
     positive = sum(1 for s in scores.values() if s >= min_score)
-    confirmed = positive >= required_positive
+    
+    # Con solo 2 TFs, basta que 1 sea positivo (más permisivo)
+    req = 1 if len(scores) == 2 else required_positive
+    confirmed = positive >= req
     return confirmed, scores
 
 
@@ -647,7 +684,10 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states,
     mtf_confirmed = True  # por defecto pasa
     mtf_info = ""
     if use_mtf:
-        mtf_confirmed, mtf_scores = check_multi_tf(coin, default_tf, required_positive=mtf_required)
+        # Para TFs cortos (5m, 15m) bajar el min_score a 1 porque el score raramente llega a 2
+        short_tfs = ["1m", "3m", "5m", "15m", "30m"]
+        min_score_mtf = 1 if default_tf in short_tfs else 2
+        mtf_confirmed, mtf_scores = check_multi_tf(coin, default_tf, required_positive=mtf_required, min_score=min_score_mtf)
         scores_str = " ".join([f"{tf.upper()}:{s:+d}" for tf, s in mtf_scores.items()])
         mtf_info = f"\n📊 Multi-TF: {scores_str}"
         status = "✅ Alineado" if mtf_confirmed else "❌ No alineado"

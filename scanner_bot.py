@@ -468,18 +468,73 @@ def check_multi_tf(coin, default_tf, required_positive=2, min_score=2):
 # ============ BINANCE / EXCHANGES ============
 
 def fetch_realtime_price(symbol):
-    """Precio en tiempo real desde Binance REST API"""
+    """
+    Precio en tiempo real — Binance bloqueado en GitHub Actions (IPs AWS).
+    Usa OKX primero ya que funciona bien, luego KuCoin y Gate.io como respaldo.
+    """
+    # 1. OKX — el más confiable desde GitHub Actions
+    try:
+        url = "https://www.okx.com/api/v5/market/ticker"
+        params = {"instId": f"{symbol}-USDT"}
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, params=params, headers=headers, timeout=8)
+        data = r.json()
+        if data.get("code") == "0" and data.get("data"):
+            price = float(data["data"][0]["last"])
+            print(f"    [precio okx: ${price}]")
+            return price, "okx"
+        else:
+            print(f"    [okx error: {data.get("msg", "sin precio")  }]")
+    except Exception as e:
+        print(f"    [okx excepcion: {e}]")
+
+    # 2. KuCoin
+    try:
+        url = "https://api.kucoin.com/api/v1/market/orderbook/level1"
+        params = {"symbol": f"{symbol}-USDT"}
+        r = requests.get(url, params=params, timeout=8)
+        data = r.json()
+        if data.get("code") == "200000" and data.get("data"):
+            price = float(data["data"]["price"])
+            print(f"    [precio kucoin: ${price}]")
+            return price, "kucoin"
+        else:
+            print(f"    [kucoin error: {data.get("msg", "sin precio")}]")
+    except Exception as e:
+        print(f"    [kucoin excepcion: {e}]")
+
+    # 3. Gate.io
+    try:
+        url = "https://api.gateio.ws/api/v4/spot/tickers"
+        params = {"currency_pair": f"{symbol}_USDT"}
+        r = requests.get(url, params=params, timeout=8)
+        data = r.json()
+        if data and isinstance(data, list) and data[0].get("last"):
+            price = float(data[0]["last"])
+            print(f"    [precio gate: ${price}]")
+            return price, "gate"
+        else:
+            print(f"    [gate error: respuesta inesperada]")
+    except Exception as e:
+        print(f"    [gate excepcion: {e}]")
+
+    # 4. Binance — ultimo intento (suele estar bloqueado en GitHub Actions)
     try:
         url = f"{BINANCE_BASE}/ticker/price"
         params = {"symbol": f"{symbol}USDT"}
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, params=params, timeout=8)
         if r.status_code == 200:
             data = r.json()
             if "price" in data:
-                return float(data["price"])
-    except:
-        pass
-    return None
+                price = float(data["price"])
+                print(f"    [precio binance: ${price}]")
+                return price, "binance"
+        print(f"    [binance status: {r.status_code}]")
+    except Exception as e:
+        print(f"    [binance excepcion: {e}]")
+
+    print(f"    ⚠️ TODOS los exchanges fallaron para {symbol} — usando close")
+    return None, None
 
 def fetch_klines(symbol, interval="4h", limit=100):
     # 1. Binance global
@@ -711,10 +766,11 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states,
         print(f"  ❌ Sin datos")
         return None
 
-    # Precio en tiempo real
-    realtime_price = fetch_realtime_price(coin)
+    # Precio en tiempo real con fallback a último close
+    realtime_price, rt_src = fetch_realtime_price(coin)
     price = realtime_price if realtime_price else closes[-1]
-    print(f"  💰 Precio: ${fmt_price(price)}")
+    src_tag = f" [{rt_src}]" if rt_src else " [close]"
+    print(f"  💰 Precio: ${fmt_price(price)}{src_tag}")
 
     # Indicadores
     rsi_def  = calc_rsi(closes)
@@ -1012,11 +1068,12 @@ def run():
         # ── Alertas de precio ────────────────────────────────────
         if coin in raw_alerts and new_state:
             try:
-                current_price = fetch_realtime_price(coin)
+                current_price, rt_src2 = fetch_realtime_price(coin)
                 if current_price is None:
                     current_price = new_state.get("price")
+                    rt_src2 = "close"
 
-                print(f"  💰 {coin} precio actual: ${fmt_price(current_price)}")
+                print(f"  💰 {coin} precio actual: ${fmt_price(current_price)} [{rt_src2}]")
 
                 coin_alerts = raw_alerts[coin]
                 if isinstance(coin_alerts, dict):

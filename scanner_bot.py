@@ -69,45 +69,68 @@ class CryptoMLPredictor:
 
     def train(self):
         """
-        Entrena el modelo con datos sintéticos balanceados.
-        
-        PROBLEMA ANTERIOR: el label era muy restrictivo (solo RSI<35 + OBV + momentum>0)
-        lo que generaba ~5% de casos positivos. El modelo aprendía a decir "bajista" 
-        siempre y daba 0-7% de probabilidad a todo.
-        
-        SOLUCIÓN: dataset balanceado 50/50 con múltiples condiciones alcistas realistas.
+        Modelo calibrado a los triggers reales del scanner:
+          - obv_up:     OBV en tendencia alcista
+          - rsi_low:    RSI < umbral (sobreventa)
+          - rsi_high:   RSI > umbral (sobrecompra) — señal de fuerza en breakout
+          - rsi_rising: RSI subiendo desde niveles bajos (recuperación)
+          - spike_solo: Spike de volumen solo (sin exigir vela verde)
+
+        Features del modelo (deben coincidir exactamente con predict()):
+          0  rsi            — valor 0-100
+          1  obv_up         — 1 si OBV alcista, 0 si no
+          2  spike_ratio    — ratio volumen vs promedio 20 velas
+          3  momentum_3     — cambio % en últimas 3 velas  (rsi_rising proxy)
+          4  momentum_10    — cambio % en últimas 10 velas (tendencia corta)
+          5  bb_pct         — posición en Bollinger 0=inferior 1=superior
+          6  macd_h         — histograma MACD normalizado
+          7  ema_bull       — 1 si EMA9 > EMA21
+          8  rsi_prev_diff  — RSI actual - RSI hace 3 velas (subiendo = positivo)
+          9  vol_trend      — ratio volumen última vela vs promedio 5 velas
         """
         if not ML_AVAILABLE:
             return False
 
-        print("🤖 Entrenando modelo ML...")
+        print("🤖 Entrenando modelo ML (calibrado a tus triggers)...")
 
         X_train = []
         y_train = []
-
         rng = np.random.default_rng(42)
 
-        for _ in range(2000):
-            rsi      = rng.uniform(0, 100)
-            macd_h   = rng.uniform(-2, 2)
-            ema_bull = rng.choice([0, 1])
-            bb_pct   = rng.uniform(0, 1)
-            spike_r  = rng.uniform(0.5, 3)
-            obv_up   = rng.choice([0, 1])
-            momentum = rng.uniform(-0.15, 0.15)
-            volatil  = rng.uniform(0, 0.15)
+        for _ in range(3000):
+            rsi         = rng.uniform(10, 95)
+            obv_up      = rng.choice([0, 1])
+            spike_ratio = rng.uniform(0.3, 4.0)
+            mom3        = rng.uniform(-0.08, 0.08)   # cambio % 3 velas
+            mom10       = rng.uniform(-0.12, 0.12)   # cambio % 10 velas
+            bb_pct      = rng.uniform(0, 1)
+            macd_h      = rng.uniform(-1.5, 1.5)
+            ema_bull    = rng.choice([0, 1])
+            rsi_diff    = rng.uniform(-15, 15)        # RSI subiendo/bajando
+            vol_trend   = rng.uniform(0.3, 3.0)       # volumen relativo
 
-            features = [rsi, macd_h, ema_bull, bb_pct, spike_r, obv_up, momentum, volatil]
+            features = [rsi, obv_up, spike_ratio, mom3, mom10,
+                        bb_pct, macd_h, ema_bull, rsi_diff, vol_trend]
 
-            # Señales alcistas: cualquiera de estas combinaciones cuenta
-            cond_oversold   = rsi < 35 and obv_up == 1                  # RSI bajo + acumulación
-            cond_momentum   = momentum > 0.03 and ema_bull == 1          # momentum + EMA alcista
-            cond_bb_bounce  = bb_pct < 0.2 and macd_h > 0               # rebote en BB inferior
-            cond_spike_bull = spike_r > 2.0 and obv_up == 1             # spike con volumen
-            cond_macd_bull  = macd_h > 0.5 and ema_bull == 1            # MACD fuerte + EMA
+            # ── Condiciones mapeadas a cada trigger real ──────────────────
 
-            label = 1 if any([cond_oversold, cond_momentum, cond_bb_bounce,
-                              cond_spike_bull, cond_macd_bull]) else 0
+            # obv_up: OBV alcista + precio subiendo = acumulación real
+            cond_obv_up     = obv_up == 1 and mom10 > 0.01 and rsi < 70
+
+            # rsi_low: RSI en sobreventa + cualquier señal de giro
+            cond_rsi_low    = rsi < 35 and (obv_up == 1 or rsi_diff > 2)
+
+            # rsi_high + breakout: RSI alto con momentum fuerte (no es bajista si hay fuerza)
+            cond_rsi_high   = rsi > 65 and mom3 > 0.02 and ema_bull == 1 and spike_ratio > 1.2
+
+            # rsi_rising: RSI subiendo desde zona media/baja con volumen
+            cond_rsi_rising = rsi_diff > 5 and rsi < 65 and obv_up == 1
+
+            # spike_solo: spike de volumen alto con precio no cayendo
+            cond_spike      = spike_ratio > 2.0 and mom3 > -0.01 and vol_trend > 1.5
+
+            label = 1 if any([cond_obv_up, cond_rsi_low, cond_rsi_high,
+                              cond_rsi_rising, cond_spike]) else 0
 
             X_train.append(features)
             y_train.append(label)
@@ -115,45 +138,66 @@ class CryptoMLPredictor:
         X = np.array(X_train)
         y = np.array(y_train)
 
-        # Verificar balance (debería ser ~40-60% positivos)
         pct_pos = y.mean() * 100
         print(f"  📊 Dataset: {len(y)} muestras, {pct_pos:.0f}% alcistas")
+
+        if pct_pos < 30 or pct_pos > 70:
+            print(f"  ⚠️  Balance fuera de rango ideal (30-70%). Ajustar condiciones.")
 
         self.scaler = StandardScaler()
         X_scaled = self.scaler.fit_transform(X)
 
         self.model = RandomForestClassifier(
-            n_estimators=100,
+            n_estimators=150,
             max_depth=8,
-            class_weight='balanced',  # compensa cualquier desbalance residual
+            min_samples_leaf=10,
+            class_weight='balanced',
             random_state=42
         )
         self.model.fit(X_scaled, y)
         self.is_trained = True
+
+        # Mostrar importancia de features para debug
+        feature_names = ["rsi", "obv_up", "spike_ratio", "mom3", "mom10",
+                         "bb_pct", "macd_h", "ema_bull", "rsi_diff", "vol_trend"]
+        importances = self.model.feature_importances_
+        top = sorted(zip(feature_names, importances), key=lambda x: -x[1])[:4]
+        top_str = "  ".join([f"{n}:{v:.2f}" for n, v in top])
+        print(f"  🎯 Top features: {top_str}")
         print("✅ Modelo ML entrenado")
         return True
 
     def predict(self, closes, vols, rsi, macd, ema_cross, bb, spike, obv):
         """
-        Predice probabilidad de movimiento alcista.
-        Retorna float entre 0 y 1. Default 0.5 si no hay modelo.
+        Predice probabilidad alcista usando los mismos 10 features del entrenamiento.
+        Retorna float 0-1. Default 0.5 si el modelo no está disponible.
         """
         if not self.is_trained or not ML_AVAILABLE:
             return 0.5
 
         try:
-            momentum = (closes[-1] - closes[-5]) / closes[-5] if len(closes) >= 5 else 0
-            volatil  = float(np.std(closes[-20:]) / np.mean(closes[-20:])) if len(closes) >= 20 else 0
+            # mom3: cambio % en últimas 3 velas
+            mom3  = (closes[-1] - closes[-4]) / closes[-4] if len(closes) >= 4 else 0
+            # mom10: cambio % en últimas 10 velas
+            mom10 = (closes[-1] - closes[-11]) / closes[-11] if len(closes) >= 11 else 0
+            # rsi_diff: cuánto subió/bajó el RSI en las últimas 3 velas
+            rsi_val      = rsi if rsi is not None else 50
+            rsi_prev_val = calc_rsi(closes[:-3]) if len(closes) > 17 else rsi_val
+            rsi_diff     = rsi_val - (rsi_prev_val if rsi_prev_val is not None else rsi_val)
+            # vol_trend: volumen última vela vs promedio 5 velas
+            vol_trend = vols[-1] / (sum(vols[-6:-1]) / 5) if len(vols) >= 6 and sum(vols[-6:-1]) > 0 else 1.0
 
             features = [
-                rsi if rsi is not None else 50,
+                rsi_val,
+                1 if obv and obv["trend"] == "up" else 0,
+                spike["ratio"] if spike else 1.0,
+                mom3,
+                mom10,
+                bb["pct"] if bb else 0.5,
                 macd["h"] if macd else 0,
                 1 if ema_cross and ema_cross["bullish"] else 0,
-                bb["pct"] if bb else 0.5,
-                spike["ratio"] if spike else 1,
-                1 if obv and obv["trend"] == "up" else 0,
-                momentum,
-                volatil,
+                rsi_diff,
+                vol_trend,
             ]
 
             X = self.scaler.transform([features])
@@ -528,7 +572,7 @@ def load_sent_alerts():
 def save_sent_alerts():
     try:
         now_ts = time.time()
-        cleaned = {k: v for k, v in SENT_ALERTS.items() if now_ts - v < COOLDOWN_SECONDS}
+        cleaned = {k: v for k, v in SENT_ALERTS.items() if now_ts - _normalize_ts(v) < COOLDOWN_SECONDS}
         r = requests.post(
             f"{SUPABASE_URL}/rest/v1/alert_cooldowns",
             headers=SUPA_HEADERS,
@@ -605,16 +649,29 @@ def send_telegram(msg):
 
 # ============ COOLDOWN ============
 
+def _normalize_ts(ts):
+    """
+    El HTML guarda cooldowns con Date.now() de JS = milisegundos.
+    Python usa time.time() = segundos.
+    Si ts > 1e11 es milisegundos, dividir por 1000.
+    Ej: 1742500000000 ms → 1742500000.0 s
+    """
+    if ts and ts > 1e11:
+        return ts / 1000.0
+    return float(ts) if ts else 0.0
+
 def can_send(coin, trigger):
     key = f"{coin}_{trigger}"
     now = time.time()
     if key in SENT_ALERTS:
-        if now - SENT_ALERTS[key] < COOLDOWN_SECONDS:
+        ts = _normalize_ts(SENT_ALERTS[key])
+        if now - ts < COOLDOWN_SECONDS:
             return False
     return True
 
 def mark_sent(coin, trigger):
     key = f"{coin}_{trigger}"
+    # Guardamos siempre en segundos desde Python
     SENT_ALERTS[key] = time.time()
 
 
@@ -902,7 +959,7 @@ def run():
 
     # Limpiar cooldowns vencidos
     now_ts = time.time()
-    SENT_ALERTS = {k: v for k, v in SENT_ALERTS.items() if now_ts - v < COOLDOWN_SECONDS}
+    SENT_ALERTS = {k: v for k, v in SENT_ALERTS.items() if now_ts - _normalize_ts(v) < COOLDOWN_SECONDS}
     print(f"🕐 {len(SENT_ALERTS)} cooldowns activos")
 
     # Cargar estado de confirmation candles desde Supabase

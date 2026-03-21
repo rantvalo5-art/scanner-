@@ -484,7 +484,8 @@ def fetch_realtime_price(symbol):
             print(f"    [precio okx: ${price}]")
             return price, "okx"
         else:
-            print(f"    [okx error: {data.get("msg", "sin precio")  }]")
+            okx_msg = data.get("msg", "sin precio")
+            print(f"    [okx error: {okx_msg}]")
     except Exception as e:
         print(f"    [okx excepcion: {e}]")
 
@@ -499,7 +500,8 @@ def fetch_realtime_price(symbol):
             print(f"    [precio kucoin: ${price}]")
             return price, "kucoin"
         else:
-            print(f"    [kucoin error: {data.get("msg", "sin precio")}]")
+            kc_msg = data.get("msg", "sin precio")
+            print(f"    [kucoin error: {kc_msg}]")
     except Exception as e:
         print(f"    [kucoin excepcion: {e}]")
 

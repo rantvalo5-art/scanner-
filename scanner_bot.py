@@ -350,7 +350,10 @@ def calc_bb(closes, period=20):
     lower = mid - 2 * std
     rng = upper - lower or 1
     pct = (closes[-1] - lower) / rng
-    return {"pct": pct}
+    # BB Width = (upper - lower) / mid * 100 → % del precio medio
+    # Valor bajo = squeeze (baja volatilidad, breakout inminente)
+    width = ((upper - lower) / mid * 100) if mid > 0 else 0
+    return {"pct": pct, "width": width, "upper": upper, "lower": lower, "mid": mid}
 
 def calc_obv(vols, closes):
     if len(vols) < 10:
@@ -953,6 +956,38 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states,
             if obv2 and obv2["trend"] == "down":
                 mark_sent(coin, alert_key)
                 send_telegram(f"↓ <b>OBV DIST — {coin}</b>\nOBV ({atf.upper()}) bajista — ${px}")
+
+        elif atype == "bb_width_low" and aval is not None:
+            bb2 = calc_bb(c2)
+            if bb2 and bb2["width"] < float(aval):
+                mark_sent(coin, alert_key)
+                send_telegram(
+                    f"🎯 <b>BB SQUEEZE — {coin}</b>\n"
+                    f"BB Width ({atf.upper()}): {bb2['width']:.2f}% < {aval}%\n"
+                    f"Breakout inminente — ${px}"
+                )
+
+        elif atype == "bb_pct_low" and aval is not None:
+            bb2 = calc_bb(c2)
+            if bb2 and (bb2["pct"] * 100) < float(aval):
+                mark_sent(coin, alert_key)
+                pct_val = bb2['pct'] * 100
+                send_telegram(
+                    f"📉 <b>BB %B BAJO — {coin}</b>\n"
+                    f"BB %B ({atf.upper()}): {pct_val:.1f}% < {aval}%\n"
+                    f"Precio cerca banda inferior — ${px}"
+                )
+
+        elif atype == "bb_pct_high" and aval is not None:
+            bb2 = calc_bb(c2)
+            if bb2 and (bb2["pct"] * 100) > float(aval):
+                mark_sent(coin, alert_key)
+                pct_val = bb2['pct'] * 100
+                send_telegram(
+                    f"📈 <b>BB %B ALTO — {coin}</b>\n"
+                    f"BB %B ({atf.upper()}): {pct_val:.1f}% > {aval}%\n"
+                    f"Precio cerca banda superior — ${px}"
+                )
 
     # Guardar estados por TF
     new_state = {

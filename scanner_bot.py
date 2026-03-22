@@ -350,10 +350,18 @@ def calc_bb(closes, period=20):
     lower = mid - 2 * std
     rng = upper - lower or 1
     pct = (closes[-1] - lower) / rng
-    # BB Width = (upper - lower) / mid * 100 → % del precio medio
-    # Valor bajo = squeeze (baja volatilidad, breakout inminente)
     width = ((upper - lower) / mid * 100) if mid > 0 else 0
-    return {"pct": pct, "width": width, "upper": upper, "lower": lower, "mid": mid}
+    # Width de la vela anterior para detectar expansión
+    prev_width = None
+    if len(closes) >= period + 1:
+        sl_prev = closes[-period-1:-1]
+        mid_prev = sum(sl_prev) / period
+        std_prev = math.sqrt(sum((x - mid_prev) ** 2 for x in sl_prev) / period)
+        prev_width = ((4 * std_prev) / mid_prev * 100) if mid_prev > 0 else 0
+    # Dirección del precio en la vela actual
+    bullish = len(closes) >= 2 and closes[-1] > closes[-2]
+    return {"pct": pct, "width": width, "prev_width": prev_width,
+            "upper": upper, "lower": lower, "mid": mid, "bullish": bullish}
 
 def calc_obv(vols, closes):
     if len(vols) < 10:
@@ -988,6 +996,33 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states,
                     f"BB %B ({atf.upper()}): {pct_val:.1f}% > {aval}%\n"
                     f"Precio cerca banda superior — ${px}"
                 )
+
+        elif atype == "bb_width_high" and aval is not None:
+            bb2 = calc_bb(c2)
+            if bb2 and bb2["width"] > float(aval):
+                mark_sent(coin, alert_key)
+                dir_label = "ALCISTA 📈" if bb2["bullish"] else "BAJISTA 📉"
+                dir_emoji  = "📈" if bb2["bullish"] else "📉"
+                send_telegram(
+                    f"{dir_emoji} <b>BB EXPANSIÓN {dir_label} — {coin}</b>\n"
+                    f"BB Width ({atf.upper()}): {bb2['width']:.2f}% > {aval}%\n"
+                    f"Precio {'subiendo' if bb2['bullish'] else 'bajando'} — ${px}"
+                )
+
+        elif atype == "bb_width_expansion" and aval is not None:
+            bb2 = calc_bb(c2)
+            if bb2 and bb2["prev_width"] is not None and bb2["prev_width"] > 0:
+                growth_pct = ((bb2["width"] - bb2["prev_width"]) / bb2["prev_width"]) * 100
+                if growth_pct >= float(aval):
+                    mark_sent(coin, alert_key)
+                    dir_label = "ALCISTA" if bb2["bullish"] else "BAJISTA"
+                    dir_emoji  = "🚀📈" if bb2["bullish"] else "🚀📉"
+                    send_telegram(
+                        f"{dir_emoji} <b>BB EXPANSIÓN {dir_label} — {coin}</b>\n"
+                        f"Width ({atf.upper()}): {bb2['prev_width']:.2f}% → {bb2['width']:.2f}% "
+                        f"(+{growth_pct:.0f}%)\n"
+                        f"Precio {'subiendo' if bb2['bullish'] else 'bajando'} — ${px}"
+                    )
 
     # Guardar estados por TF
     new_state = {

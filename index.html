@@ -540,6 +540,13 @@ button.active{background:#1a3d12;border-color:#4a7c2f;color:#7bc142}
         <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('strong')" id="altog-strong">OFF</div><div class="al-info"><div class="al-name">💎 Strong Buy</div><div class="al-desc">Puntaje total llega a <input class="al-inp" id="al-strong-score" value="4" type="number" min="2" max="5"> o más en <select class="al-tf-sel" id="al-tf-strong"><option value="1m">1M</option><option value="5m">5M</option><option value="15m">15M</option><option value="1h" selected>1H</option><option value="4h">4H</option><option value="1d">1D</option></select></div></div></div>
 
         <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('sell')" id="altog-sell">OFF</div><div class="al-info"><div class="al-name">📉 Strong Sell</div><div class="al-desc">Puntaje total llega a <input class="al-inp" id="al-sell-score" value="-4" type="number" min="-5" max="-2"> o menos en <select class="al-tf-sel" id="al-tf-sell"><option value="1m">1M</option><option value="5m">5M</option><option value="15m">15M</option><option value="1h" selected>1H</option><option value="4h">4H</option><option value="1d">1D</option></select></div></div></div>
+
+        <div style="font-size:10px;font-weight:600;color:#4a5260;text-transform:uppercase;letter-spacing:0.5px;padding:8px 0 4px">📊 Bollinger Bands</div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('bb_width_low')" id="altog-bb_width_low">OFF</div><div class="al-info"><div class="al-name">🎯 BB Squeeze (Width &lt; X)</div><div class="al-desc">BB Width menor a <input class="al-inp" id="al-bb-width-low-val" value="4" type="number" min="0.1" max="50" step="0.1">% en <select class="al-tf-sel" id="al-tf-bb_width_low"><option value="1m">1M</option><option value="5m">5M</option><option value="15m">15M</option><option value="1h" selected>1H</option><option value="4h">4H</option><option value="1d">1D</option></select></div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('bb_width_high')" id="altog-bb_width_high">OFF</div><div class="al-info"><div class="al-name">📊 BB Expansión (Width &gt; X)</div><div class="al-desc">BB Width mayor a <input class="al-inp" id="al-bb-width-high-val" value="8" type="number" min="0.1" max="100" step="0.1">% en <select class="al-tf-sel" id="al-tf-bb_width_high"><option value="1m">1M</option><option value="5m">5M</option><option value="15m">15M</option><option value="1h" selected>1H</option><option value="4h">4H</option><option value="1d">1D</option></select></div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('bb_width_expansion')" id="altog-bb_width_expansion">OFF</div><div class="al-info"><div class="al-name">🚀 BB Expansión relativa (creció X%)</div><div class="al-desc">BB Width creció más de <input class="al-inp" id="al-bb-width-exp-val" value="50" type="number" min="1" max="500" step="1">% vs vela anterior en <select class="al-tf-sel" id="al-tf-bb_width_expansion"><option value="1m">1M</option><option value="5m">5M</option><option value="15m">15M</option><option value="1h" selected>1H</option><option value="4h">4H</option><option value="1d">1D</option></select></div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('bb_pct_low')" id="altog-bb_pct_low">OFF</div><div class="al-info"><div class="al-name">📉 BB %B Bajo (cerca banda inferior)</div><div class="al-desc">BB %%B menor a <input class="al-inp" id="al-bb-pct-low-val" value="20" type="number" min="0" max="50" step="1">% en <select class="al-tf-sel" id="al-tf-bb_pct_low"><option value="1m">1M</option><option value="5m">5M</option><option value="15m">15M</option><option value="1h" selected>1H</option><option value="4h">4H</option><option value="1d">1D</option></select></div></div></div>
+        <div class="al-row"><div class="al-toggle" onclick="toggleGlobal('bb_pct_high')" id="altog-bb_pct_high">OFF</div><div class="al-info"><div class="al-name">📈 BB %B Alto (cerca banda superior)</div><div class="al-desc">BB %%B mayor a <input class="al-inp" id="al-bb-pct-high-val" value="80" type="number" min="50" max="100" step="1">% en <select class="al-tf-sel" id="al-tf-bb_pct_high"><option value="1m">1M</option><option value="5m">5M</option><option value="15m">15M</option><option value="1h" selected>1H</option><option value="4h">4H</option><option value="1d">1D</option></select></div></div></div>
       </div>
       <div class="bt-controls" style="flex-direction:column;gap:10px;margin-top:12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -1995,7 +2002,8 @@ async function checkTriggers(coin,d){
   // Group alerts by TF to minimize fetches
   const tfGroups={};
   const allTypes=['rsi_low','rsi_high','rsi_rising','rsi_cross30','rsi_cross50',
-    'obv_up','obv_down','spike_solo','spike_green','macd_up','macd_down','mr','ob','strong','sell'];
+    'obv_up','obv_down','spike_solo','spike_green','macd_up','macd_down','mr','ob','strong','sell',
+    'bb_width_low','bb_width_high','bb_width_expansion','bb_pct_low','bb_pct_high'];
   allTypes.forEach(t=>{
     if(!isEnabled(coin,t))return;
     const tf=getAlertTF(t);
@@ -2079,6 +2087,40 @@ async function checkTriggers(coin,d){
 
       if(type==='sell'&&score<=sellScore)
         fire(type,`📉 <b>STRONG SELL</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: ${score} [${tf.toUpperCase()}]`,`📱 ${coin} Sell ${score}! [${tf}]`,'err');
+
+      // ── BOLLINGER BANDS — detección global ──────────────────────────
+      if(type==='bb_width_low'&&ad.bb){
+        const threshold=parseFloat(document.getElementById('al-bb-width-low-val')?.value||4);
+        if(ad.bb.width<threshold)
+          fire(type,`🎯 <b>BB SQUEEZE</b>\n<b>${coin}/USDT</b> — $${px}\nBB Width: ${ad.bb.width.toFixed(2)}% < ${threshold}% — breakout inminente [${tf.toUpperCase()}]`,`🎯 ${coin} BB Squeeze ${ad.bb.width.toFixed(2)}% [${tf}]`);
+      }
+      if(type==='bb_width_high'&&ad.bb){
+        const threshold=parseFloat(document.getElementById('al-bb-width-high-val')?.value||8);
+        if(ad.bb.width>threshold){
+          const dir=ad.bb.bullish?'📈 alcista':'📉 bajista';
+          fire(type,`📊 <b>BB EXPANSIÓN ${ad.bb.bullish?'ALCISTA':'BAJISTA'}</b>\n<b>${coin}/USDT</b> — $${px}\nBB Width: ${ad.bb.width.toFixed(2)}% > ${threshold}% ${dir} [${tf.toUpperCase()}]`,`📊 ${coin} BB Width ${ad.bb.width.toFixed(2)}% [${tf}]`);
+        }
+      }
+      if(type==='bb_width_expansion'&&ad.bb&&ad.bb.prevWidth!=null&&ad.bb.prevWidth>0){
+        const threshold=parseFloat(document.getElementById('al-bb-width-exp-val')?.value||50);
+        const growth=((ad.bb.width-ad.bb.prevWidth)/ad.bb.prevWidth)*100;
+        if(growth>=threshold){
+          const dir=ad.bb.bullish?'ALCISTA':'BAJISTA';
+          fire(type,`🚀 <b>BB EXPANSIÓN ${dir}</b>\n<b>${coin}/USDT</b> — $${px}\nWidth: ${ad.bb.prevWidth.toFixed(2)}% → ${ad.bb.width.toFixed(2)}% (+${growth.toFixed(0)}%) [${tf.toUpperCase()}]`,`🚀 ${coin} BB +${growth.toFixed(0)}% [${tf}]`);
+        }
+      }
+      if(type==='bb_pct_low'&&ad.bb){
+        const threshold=parseFloat(document.getElementById('al-bb-pct-low-val')?.value||20);
+        const pctVal=ad.bb.pct*100;
+        if(pctVal<threshold)
+          fire(type,`📉 <b>BB %B BAJO</b>\n<b>${coin}/USDT</b> — $${px}\nBB %B: ${pctVal.toFixed(1)}% < ${threshold}% — precio cerca banda inferior [${tf.toUpperCase()}]`,`📉 ${coin} BB %B ${pctVal.toFixed(1)}% [${tf}]`);
+      }
+      if(type==='bb_pct_high'&&ad.bb){
+        const threshold=parseFloat(document.getElementById('al-bb-pct-high-val')?.value||80);
+        const pctVal=ad.bb.pct*100;
+        if(pctVal>threshold)
+          fire(type,`📈 <b>BB %B ALTO</b>\n<b>${coin}/USDT</b> — $${px}\nBB %B: ${pctVal.toFixed(1)}% > ${threshold}% — precio cerca banda superior [${tf.toUpperCase()}]`,`📈 ${coin} BB %B ${pctVal.toFixed(1)}% [${tf}]`,'warn');
+      }
     }
   }
 
@@ -2720,7 +2762,7 @@ async function saveState(){
     const globalToSave={};
     Object.keys(globalTriggers).forEach(k=>{
       globalToSave[k]={on:globalTriggers[k]};
-      const valMap={rsi_low:'al-rsi-low-val',rsi_high:'al-rsi-high-val',spike_solo:'al-spike-solo-x',spike_green:'al-spike-green-x',mr:'al-mr-rsi',ob:'al-ob-rsi',strong:'al-strong-score',sell:'al-sell-score'};
+      const valMap={rsi_low:'al-rsi-low-val',rsi_high:'al-rsi-high-val',spike_solo:'al-spike-solo-x',spike_green:'al-spike-green-x',mr:'al-mr-rsi',ob:'al-ob-rsi',strong:'al-strong-score',sell:'al-sell-score',bb_width_low:'al-bb-width-low-val',bb_width_high:'al-bb-width-high-val',bb_width_expansion:'al-bb-width-exp-val',bb_pct_low:'al-bb-pct-low-val',bb_pct_high:'al-bb-pct-high-val'};
       const elId=valMap[k];
       if(elId){const el=document.getElementById(elId);if(el)globalToSave[k].val=parseFloat(el.value);}
       // Save per-alert TF
@@ -2770,7 +2812,7 @@ async function loadState(){
             const el=document.getElementById('altog-'+k);
             if(el){el.textContent=on?'ON':'OFF';el.classList.toggle('on',!!on);}
             // restore val inputs
-            const valMap={rsi_low:'al-rsi-low-val',rsi_high:'al-rsi-high-val',spike_solo:'al-spike-solo-x',spike_green:'al-spike-green-x',mr:'al-mr-rsi',ob:'al-ob-rsi',strong:'al-strong-score',sell:'al-sell-score'};
+            const valMap={rsi_low:'al-rsi-low-val',rsi_high:'al-rsi-high-val',spike_solo:'al-spike-solo-x',spike_green:'al-spike-green-x',mr:'al-mr-rsi',ob:'al-ob-rsi',strong:'al-strong-score',sell:'al-sell-score',bb_width_low:'al-bb-width-low-val',bb_width_high:'al-bb-width-high-val',bb_width_expansion:'al-bb-width-exp-val',bb_pct_low:'al-bb-pct-low-val',bb_pct_high:'al-bb-pct-high-val'};
             if(typeof v==='object'&&v.val!==undefined&&valMap[k]){const el2=document.getElementById(valMap[k]);if(el2)el2.value=v.val;}
             // Restore TF
             if(typeof v==='object'&&v.tf){const tfEl=document.getElementById('al-tf-'+k);if(tfEl)tfEl.value=v.tf;}

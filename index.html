@@ -681,7 +681,10 @@ function calcBB(c,p=20){
   const last=c[c.length-1];
   const upper=mid+2*std,lower=mid-2*std;
   const pct=(last-lower)/(upper-lower||1);
-  return{pct};
+  // BB Width = (upper - lower) / mid * 100  → porcentaje del precio medio
+  // Valor bajo (ej <5%) = squeeze, breakout inminente
+  const width=mid>0?((upper-lower)/mid)*100:0;
+  return{pct, width, upper, lower, mid};
 }
 function calcVol(vols,closes){
   if(vols.length<20)return null;
@@ -1829,8 +1832,8 @@ function renderCoinAlerts(){
     const indList = ct.ind_alerts || [];
 
     const renderIndList = () => indList.map((a,i) => {
-      const typeLabels = {rsi_low:'📉 RSI <',rsi_high:'📈 RSI >',score_up:'💎 Score ≥',score_down:'📉 Score ≤',obv_up:'↑ OBV acum',obv_down:'↓ OBV dist'};
-      const hasVal = ['rsi_low','rsi_high','score_up','score_down'].includes(a.type);
+      const typeLabels = {rsi_low:'📉 RSI <',rsi_high:'📈 RSI >',score_up:'💎 Score ≥',score_down:'📉 Score ≤',obv_up:'↑ OBV acum',obv_down:'↓ OBV dist',bb_width_low:'🎯 BB Width <',bb_pct_low:'📉 BB %B <',bb_pct_high:'📈 BB %B >'};
+      const hasVal = ['rsi_low','rsi_high','score_up','score_down','bb_width_low','bb_pct_low','bb_pct_high'].includes(a.type);
       const valStr = hasVal ? `<span style="color:#7bc142;font-weight:600">${a.val}</span>` : '';
       return `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:#21252d;border-radius:6px;border:1px solid #2e3340;flex-wrap:wrap">
         <span style="font-size:12px;color:#c8cdd5">${typeLabels[a.type]||a.type}</span>
@@ -1852,6 +1855,9 @@ function renderCoinAlerts(){
             <option value="score_down">📉 Score menor o igual a</option>
             <option value="obv_up">↑ OBV acumulando</option>
             <option value="obv_down">↓ OBV distribuyendo</option>
+            <option value="bb_width_low">🎯 BB Width menor a (squeeze)</option>
+            <option value="bb_pct_low">📉 BB %B menor a (banda baja)</option>
+            <option value="bb_pct_high">📈 BB %B mayor a (banda alta)</option>
           </select>
           <input type="number" id="ind-val-${coin}" placeholder="valor" style="width:60px;padding:4px 6px;font-size:12px;border:1px solid #2e3340;border-radius:6px;background:#21252d;color:#e8ecf0;outline:none">
           <select id="ind-tf-${coin}" style="padding:4px 6px;font-size:12px;border:1px solid #2e3340;border-radius:6px;background:#21252d;color:#9aa0ab;outline:none">
@@ -1881,7 +1887,7 @@ function addIndAlert(coin){
   if(!typeEl||!tfEl)return;
   const type=typeEl.value;
   const tf=tfEl.value;
-  const hasVal=['rsi_low','rsi_high','score_up','score_down'].includes(type);
+  const hasVal=['rsi_low','rsi_high','score_up','score_down','bb_width_low','bb_pct_low','bb_pct_high'].includes(type);
   const val=hasVal?parseFloat(valEl?valEl.value:0):null;
   if(hasVal&&(isNaN(val)||val===null)){showToast('Ingresa un valor numérico','err');return;}
   if(!coinTriggers[coin])coinTriggers[coin]={};
@@ -1890,7 +1896,7 @@ function addIndAlert(coin){
   if(valEl)valEl.value='';
   if(stateLoaded)saveState();
   refreshIndList(coin); // only refresh the list, don't re-render everything
-  const typeLabels={rsi_low:'RSI <',rsi_high:'RSI >',score_up:'Score ≥',score_down:'Score ≤',obv_up:'OBV acum',obv_down:'OBV dist'};
+  const typeLabels={rsi_low:'RSI <',rsi_high:'RSI >',score_up:'Score ≥',score_down:'Score ≤',obv_up:'OBV acum',obv_down:'OBV dist',bb_width_low:'BB Width <',bb_pct_low:'BB %B <',bb_pct_high:'BB %B >'};
   showToast(`✅ ${coin}: ${typeLabels[type]||type} ${val!==null?val:''} (${tf})`);
 }
 
@@ -1905,9 +1911,9 @@ function refreshIndList(coin){
   const container=document.getElementById(`ind-list-${coin}`);
   if(!container)return;
   const indList=(coinTriggers[coin]&&coinTriggers[coin].ind_alerts)||[];
-  const typeLabels={rsi_low:'📉 RSI <',rsi_high:'📈 RSI >',score_up:'💎 Score ≥',score_down:'📉 Score ≤',obv_up:'↑ OBV acum',obv_down:'↓ OBV dist'};
+  const typeLabels={rsi_low:'📉 RSI <',rsi_high:'📈 RSI >',score_up:'💎 Score ≥',score_down:'📉 Score ≤',obv_up:'↑ OBV acum',obv_down:'↓ OBV dist',bb_width_low:'🎯 BB Width <',bb_pct_low:'📉 BB %B <',bb_pct_high:'📈 BB %B >'};
   container.innerHTML=indList.map((a,i)=>{
-    const hasVal=['rsi_low','rsi_high','score_up','score_down'].includes(a.type);
+    const hasVal=['rsi_low','rsi_high','score_up','score_down','bb_width_low','bb_pct_low','bb_pct_high'].includes(a.type);
     const valStr=hasVal?`<span style="color:#7bc142;font-weight:600">${a.val}</span>`:'';
     return`<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:#21252d;border-radius:6px;border:1px solid #2e3340;flex-wrap:wrap">
       <span style="font-size:12px;color:#c8cdd5">${typeLabels[a.type]||a.type}</span>
@@ -2060,6 +2066,47 @@ async function checkTriggers(coin,d){
 
       if(type==='sell'&&score<=sellScore)
         fire(type,`📉 <b>STRONG SELL</b>\n<b>${coin}/USDT</b> — $${px}\nPuntaje: ${score} [${tf.toUpperCase()}]`,`📱 ${coin} Sell ${score}! [${tf}]`,'err');
+    }
+  }
+
+  // ── Alertas de indicador individuales (ind_alerts) ────────────────────────
+  const indAlerts=(coinTriggers[coin]&&coinTriggers[coin].ind_alerts)||[];
+  for(const ia of indAlerts){
+    const iaKey=`ind_${ia.type}_${ia.tf}_${ia.val}`;
+    if(!canSend(iaKey))continue;
+    const iad=await getAlertData(coin,ia.tf);
+    if(!iad)continue;
+    const px2=fmtPrice(iad.price);
+    const tf2=ia.tf.toUpperCase();
+
+    if(ia.type==='bb_width_low'&&iad.bb&&ia.val!==null){
+      if(iad.bb.width<ia.val){
+        fire(iaKey,
+          `🎯 <b>BB SQUEEZE</b>
+<b>${coin}/USDT</b> — $${px2}
+BB Width: ${iad.bb.width.toFixed(2)}% < ${ia.val}% — breakout inminente [${tf2}]`,
+          `🎯 ${coin} BB Squeeze ${iad.bb.width.toFixed(2)}% [${ia.tf}]`);
+      }
+    }
+    if(ia.type==='bb_pct_low'&&iad.bb&&ia.val!==null){
+      const pctVal=(iad.bb.pct*100).toFixed(1);
+      if(iad.bb.pct*100<ia.val){
+        fire(iaKey,
+          `📉 <b>BB %B BAJO</b>
+<b>${coin}/USDT</b> — $${px2}
+BB %B: ${pctVal}% < ${ia.val}% — precio cerca banda inferior [${tf2}]`,
+          `📉 ${coin} BB %B ${pctVal}% [${ia.tf}]`);
+      }
+    }
+    if(ia.type==='bb_pct_high'&&iad.bb&&ia.val!==null){
+      const pctVal=(iad.bb.pct*100).toFixed(1);
+      if(iad.bb.pct*100>ia.val){
+        fire(iaKey,
+          `📈 <b>BB %B ALTO</b>
+<b>${coin}/USDT</b> — $${px2}
+BB %B: ${pctVal}% > ${ia.val}% — precio cerca banda superior [${tf2}]`,
+          `📈 ${coin} BB %B ${pctVal}% [${ia.tf}]`,'warn');
+      }
     }
   }
 

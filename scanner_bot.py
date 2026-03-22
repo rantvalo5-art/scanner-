@@ -852,116 +852,141 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states,
                 print(f"  ⏱  {trigger}: cooldown {remaining/60:.0f} min restantes")
             continue
 
-        spike_r = spike_def["ratio"] if spike_def else 0
+        # ── Leer el TF específico de ESTA alerta global ──────────────────
+        # El HTML guarda enabled["tf"] por cada trigger — si no hay, usa default_tf
+        trigger_tf = enabled.get("tf", default_tf) if isinstance(enabled, dict) else default_tf
+        t_closes, t_vols = get_data(trigger_tf)
+        if not t_closes:
+            print(f"  ⚠️  {trigger}: sin datos para TF {trigger_tf}")
+            continue
+
+        # Calcular indicadores en el TF de esta alerta
+        t_rsi   = calc_rsi(t_closes)
+        t_macd  = calc_macd(t_closes)
+        t_ema   = calc_ema_cross(t_closes)
+        t_bb    = calc_bb(t_closes)
+        t_spike = calc_spike(t_vols, t_closes)
+        t_obv   = calc_obv(t_vols, t_closes)
+        t_score = analyze(t_rsi, t_macd, t_ema, t_bb, t_spike)
+        t_obv_trend  = t_obv["trend"] if t_obv else "flat"
+        t_macd_dir   = "up" if t_macd and t_macd["up"] else "down" if t_macd and t_macd["down"] else "flat"
+        t_spike_r    = t_spike["ratio"] if t_spike else 0
+        t_tf_tag     = f"[{trigger_tf.upper()}]"
+
+        # Para cruces (MACD, OBV) necesitamos el estado previo de ESTE TF
+        t_prev_obv  = prev.get(f"obv_{trigger_tf}", "flat")
+        t_prev_macd = prev.get(f"macd_{trigger_tf}", "flat")
+
+        t_rsi_str = f"{t_rsi:.1f}" if t_rsi is not None else "N/A"
+
         current_signal = False
         signal_msg = ""
 
         # ── Evaluar señal con debug de por qué NO cumple ──
         if trigger == "spike":
             threshold = gv("spike", 1.5)
-            if spike_r > threshold:
+            if t_spike_r > threshold:
                 current_signal = True
-                signal_msg = f"⚡ <b>VOLUME SPIKE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x promedio {tf_tag}"
+                signal_msg = f"⚡ <b>VOLUME SPIKE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {t_spike_r:.1f}x promedio {t_tf_tag}"
             else:
-                print(f"  — spike: {spike_r:.1f}x < umbral {threshold}x")
+                print(f"  — spike: {t_spike_r:.1f}x < umbral {threshold}x {t_tf_tag}")
 
         elif trigger == "spike_green":
             threshold = gv("spike_green", 2.0)
-            if spike_r > threshold and spike_def and spike_def.get("up"):
+            if t_spike_r > threshold and t_spike and t_spike.get("up"):
                 current_signal = True
-                signal_msg = f"⚡ <b>SPIKE VERDE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {spike_r:.1f}x + vela verde 🔥 {tf_tag}"
+                signal_msg = f"⚡ <b>SPIKE VERDE</b>\n<b>{coin}/USDT</b> — ${px}\nSpike: {t_spike_r:.1f}x + vela verde 🔥 {t_tf_tag}"
             else:
-                up_str = "verde" if (spike_def and spike_def.get("up")) else "roja"
-                print(f"  — spike_green: {spike_r:.1f}x (umbral {threshold}x) vela {up_str}")
+                up_str = "verde" if (t_spike and t_spike.get("up")) else "roja"
+                print(f"  — spike_green: {t_spike_r:.1f}x (umbral {threshold}x) vela {up_str} {t_tf_tag}")
 
         elif trigger == "macd_up":
-            if macd_dir_def == "up" and prev_macd != "up":
+            if t_macd_dir == "up" and t_prev_macd != "up":
                 current_signal = True
-                signal_msg = f"📊 <b>MACD CRUCE ALCISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó positivo ✅ {tf_tag}"
+                signal_msg = f"📊 <b>MACD CRUCE ALCISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó positivo ✅ {t_tf_tag}"
             else:
-                print(f"  — macd_up: actual={macd_dir_def} prev={prev_macd} (necesita up→up nuevo cruce)")
+                print(f"  — macd_up: actual={t_macd_dir} prev={t_prev_macd} {t_tf_tag}")
 
         elif trigger == "macd_down":
-            if macd_dir_def == "down" and prev_macd != "down":
+            if t_macd_dir == "down" and t_prev_macd != "down":
                 current_signal = True
-                signal_msg = f"📊 <b>MACD CRUCE BAJISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó negativo ⚠️ {tf_tag}"
+                signal_msg = f"📊 <b>MACD CRUCE BAJISTA</b>\n<b>{coin}/USDT</b> — ${px}\nHistograma cruzó negativo ⚠️ {t_tf_tag}"
             else:
-                print(f"  — macd_down: actual={macd_dir_def} prev={prev_macd}")
+                print(f"  — macd_down: actual={t_macd_dir} prev={t_prev_macd} {t_tf_tag}")
 
         elif trigger == "mr":
             threshold = gv("mr", 35)
-            if rsi_def is not None and rsi_def < threshold and obv_trend_def == "up":
+            if t_rsi is not None and t_rsi < threshold and t_obv_trend == "up":
                 current_signal = True
-                signal_msg = f"🔥 <b>MEAN REVERSION</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi_def:.1f} + OBV↑ Puntaje: {score_def:+d} {tf_tag}"
+                signal_msg = f"🔥 <b>MEAN REVERSION</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {t_rsi:.1f} + OBV↑ Score: {t_score:+d} {t_tf_tag}"
             else:
-                print(f"  — mr: RSI={rsi_str_dbg} (necesita <{threshold}) OBV={obv_str} (necesita up)")
+                print(f"  — mr: RSI={t_rsi_str} (necesita <{threshold}) OBV={t_obv_trend} (necesita up) {t_tf_tag}")
 
         elif trigger == "ob":
             threshold = gv("ob", 70)
-            if rsi_def is not None and rsi_def > threshold and obv_trend_def == "down":
+            if t_rsi is not None and t_rsi > threshold and t_obv_trend == "down":
                 current_signal = True
-                signal_msg = f"🚨 <b>OVERBOUGHT COMBO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi_def:.1f} + OBV↓ {tf_tag}"
+                signal_msg = f"🚨 <b>OVERBOUGHT COMBO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {t_rsi:.1f} + OBV↓ {t_tf_tag}"
             else:
-                print(f"  — ob: RSI={rsi_str_dbg} (necesita >{threshold}) OBV={obv_str} (necesita down)")
+                print(f"  — ob: RSI={t_rsi_str} (necesita >{threshold}) OBV={t_obv_trend} (necesita down) {t_tf_tag}")
 
         elif trigger == "strong":
             threshold = gv("strong", 4)
-            if score_def >= threshold:
+            if t_score >= threshold:
                 current_signal = True
-                rsi_str = f"{rsi_def:.1f}" if rsi_def else "—"
-                signal_msg = f"💎 <b>STRONG BUY</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score_def:+d}/+5</b> RSI: {rsi_str} {tf_tag}"
+                signal_msg = f"💎 <b>STRONG BUY</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{t_score:+d}/+5</b> RSI: {t_rsi_str} {t_tf_tag}"
             else:
-                print(f"  — strong: Score={score_str} (necesita >={threshold})")
+                print(f"  — strong: Score={t_score:+d} (necesita >={threshold}) {t_tf_tag}")
 
         elif trigger == "sell":
             threshold = gv("sell", -4)
-            if score_def <= threshold:
+            if t_score <= threshold:
                 current_signal = True
-                signal_msg = f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{score_def}/-5</b> {tf_tag}"
+                signal_msg = f"📉 <b>STRONG SELL</b>\n<b>{coin}/USDT</b> — ${px}\nPuntaje: <b>{t_score}/-5</b> {t_tf_tag}"
             else:
-                print(f"  — sell: Score={score_str} (necesita <={threshold})")
+                print(f"  — sell: Score={t_score:+d} (necesita <={threshold}) {t_tf_tag}")
 
         elif trigger == "rsi_low":
             threshold = gv("rsi_low", 30)
-            if rsi_def is not None and rsi_def < threshold:
+            if t_rsi is not None and t_rsi < threshold:
                 current_signal = True
-                signal_msg = f"📉 <b>RSI BAJO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi_def:.1f} < {threshold} {tf_tag}"
+                signal_msg = f"📉 <b>RSI BAJO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {t_rsi:.1f} < {threshold} {t_tf_tag}"
             else:
-                print(f"  — rsi_low: RSI={rsi_str_dbg} (necesita <{threshold})")
+                print(f"  — rsi_low: RSI={t_rsi_str} (necesita <{threshold}) {t_tf_tag}")
 
         elif trigger == "rsi_high":
             threshold = gv("rsi_high", 70)
-            if rsi_def is not None and rsi_def > threshold:
+            if t_rsi is not None and t_rsi > threshold:
                 current_signal = True
-                signal_msg = f"📈 <b>RSI ALTO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {rsi_def:.1f} > {threshold} {tf_tag}"
+                signal_msg = f"📈 <b>RSI ALTO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI: {t_rsi:.1f} > {threshold} {t_tf_tag}"
             else:
-                print(f"  — rsi_high: RSI={rsi_str_dbg} (necesita >{threshold})")
+                print(f"  — rsi_high: RSI={t_rsi_str} (necesita >{threshold}) {t_tf_tag}")
 
         elif trigger == "rsi_rising":
-            pts   = float(gv("rsi_rising_pts", 3))
-            bars  = int(gv("rsi_rising_bars", 3))
-            rsi_old = calc_rsi(closes[:-bars]) if len(closes) > 14 + bars else None
-            slope = (rsi_def - rsi_old) if (rsi_def is not None and rsi_old is not None) else None
+            pts  = float(gv("rsi_rising_pts", 3))
+            bars = int(gv("rsi_rising_bars", 3))
+            rsi_old = calc_rsi(t_closes[:-bars]) if len(t_closes) > 14 + bars else None
+            slope = (t_rsi - rsi_old) if (t_rsi is not None and rsi_old is not None) else None
             if slope is not None and slope >= pts:
                 current_signal = True
-                signal_msg = f"📈 <b>RSI SUBIENDO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI subió {slope:.1f} pts en {bars} velas {tf_tag}"
+                signal_msg = f"📈 <b>RSI SUBIENDO</b>\n<b>{coin}/USDT</b> — ${px}\nRSI subió {slope:.1f} pts en {bars} velas {t_tf_tag}"
             else:
                 slope_str = f"{slope:.1f}" if slope is not None else "N/A"
-                print(f"  — rsi_rising: slope={slope_str} (necesita >={pts} en {bars} velas)")
+                print(f"  — rsi_rising: slope={slope_str} (necesita >={pts} en {bars} velas) {t_tf_tag}")
 
         elif trigger == "obv_up":
-            if obv_trend_def == "up":
+            if t_obv_trend == "up":
                 current_signal = True
-                signal_msg = f"↑ <b>OBV ACUMULANDO</b>\n<b>{coin}/USDT</b> — ${px}\n[{tf_tag}]"
+                signal_msg = f"↑ <b>OBV ACUMULANDO</b>\n<b>{coin}/USDT</b> — ${px}\n{t_tf_tag}"
             else:
-                print(f"  — obv_up: OBV={obv_str} (necesita up)")
+                print(f"  — obv_up: OBV={t_obv_trend} (necesita up) {t_tf_tag}")
 
         elif trigger == "obv_down":
-            if obv_trend_def == "down":
+            if t_obv_trend == "down":
                 current_signal = True
-                signal_msg = f"↓ <b>OBV DISTRIBUYENDO</b>\n<b>{coin}/USDT</b> — ${px}\n[{tf_tag}]"
+                signal_msg = f"↓ <b>OBV DISTRIBUYENDO</b>\n<b>{coin}/USDT</b> — ${px}\n{t_tf_tag}"
             else:
-                print(f"  — obv_down: OBV={obv_str} (necesita down)")
+                print(f"  — obv_down: OBV={t_obv_trend} (necesita down) {t_tf_tag}")
 
         if not current_signal:
             if use_confirmation:

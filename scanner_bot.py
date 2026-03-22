@@ -988,6 +988,68 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states,
             else:
                 print(f"  — obv_down: OBV={t_obv_trend} (necesita down) {t_tf_tag}")
 
+        # ── BOLLINGER BANDS — triggers globales ──────────────────────────
+        elif trigger == "bb_width_low":
+            threshold = gv("bb_width_low", 4.0)
+            bb_w = t_bb["width"] if t_bb else None
+            if bb_w is not None and bb_w < threshold:
+                current_signal = True
+                signal_msg = (f"🎯 <b>BB SQUEEZE</b>\n<b>{coin}/USDT</b> — ${px}\n"
+                              f"BB Width: {bb_w:.2f}% < {threshold}% — breakout inminente {t_tf_tag}")
+            else:
+                w_str = f"{bb_w:.2f}%" if bb_w is not None else "N/A"
+                print(f"  — bb_width_low: Width={w_str} (necesita <{threshold}%) {t_tf_tag}")
+
+        elif trigger == "bb_width_high":
+            threshold = gv("bb_width_high", 8.0)
+            bb_w = t_bb["width"] if t_bb else None
+            if bb_w is not None and bb_w > threshold:
+                current_signal = True
+                dir_label = "ALCISTA 📈" if (t_bb and t_bb.get("bullish")) else "BAJISTA 📉"
+                signal_msg = (f"📊 <b>BB EXPANSIÓN {dir_label}</b>\n<b>{coin}/USDT</b> — ${px}\n"
+                              f"BB Width: {bb_w:.2f}% > {threshold}% {t_tf_tag}")
+            else:
+                w_str = f"{bb_w:.2f}%" if bb_w is not None else "N/A"
+                print(f"  — bb_width_high: Width={w_str} (necesita >{threshold}%) {t_tf_tag}")
+
+        elif trigger == "bb_width_expansion":
+            threshold = gv("bb_width_expansion", 50.0)
+            bb_w     = t_bb["width"]      if t_bb else None
+            bb_pw    = t_bb["prev_width"] if t_bb else None
+            if bb_w is not None and bb_pw is not None and bb_pw > 0:
+                growth = ((bb_w - bb_pw) / bb_pw) * 100
+                if growth >= threshold:
+                    current_signal = True
+                    dir_label = "ALCISTA 📈" if (t_bb and t_bb.get("bullish")) else "BAJISTA 📉"
+                    signal_msg = (f"🚀 <b>BB EXPANSIÓN {dir_label}</b>\n<b>{coin}/USDT</b> — ${px}\n"
+                                  f"Width: {bb_pw:.2f}% → {bb_w:.2f}% (+{growth:.0f}%) {t_tf_tag}")
+                else:
+                    print(f"  — bb_width_expansion: +{growth:.0f}% (necesita >={threshold:.0f}%) {t_tf_tag}")
+            else:
+                print(f"  — bb_width_expansion: sin datos previos suficientes {t_tf_tag}")
+
+        elif trigger == "bb_pct_low":
+            threshold = gv("bb_pct_low", 20.0)
+            bb_pct = (t_bb["pct"] * 100) if t_bb else None
+            if bb_pct is not None and bb_pct < threshold:
+                current_signal = True
+                signal_msg = (f"📉 <b>BB %B BAJO</b>\n<b>{coin}/USDT</b> — ${px}\n"
+                              f"BB %B: {bb_pct:.1f}% < {threshold}% — precio cerca banda inferior {t_tf_tag}")
+            else:
+                p_str = f"{bb_pct:.1f}%" if bb_pct is not None else "N/A"
+                print(f"  — bb_pct_low: %B={p_str} (necesita <{threshold}%) {t_tf_tag}")
+
+        elif trigger == "bb_pct_high":
+            threshold = gv("bb_pct_high", 80.0)
+            bb_pct = (t_bb["pct"] * 100) if t_bb else None
+            if bb_pct is not None and bb_pct > threshold:
+                current_signal = True
+                signal_msg = (f"📈 <b>BB %B ALTO</b>\n<b>{coin}/USDT</b> — ${px}\n"
+                              f"BB %B: {bb_pct:.1f}% > {threshold}% — precio cerca banda superior {t_tf_tag}")
+            else:
+                p_str = f"{bb_pct:.1f}%" if bb_pct is not None else "N/A"
+                print(f"  — bb_pct_high: %B={p_str} (necesita >{threshold}%) {t_tf_tag}")
+
         if not current_signal:
             if use_confirmation:
                 check_confirmation(conf_state, coin, trigger, False)

@@ -1876,6 +1876,8 @@ function renderCoinAlerts(){
             <option value="bb_pct_high">📈 BB %B mayor a (banda alta)</option>
             <option value="bb_width_high">📊 BB Width mayor a (expansión)</option>
             <option value="bb_width_expansion">🚀 BB Width creció X% vs vela anterior</option>
+            <option value="spike_solo">⚡ Volume Spike mayor a X veces</option>
+            <option value="spike_green">⚡ Volume Spike Verde mayor a X veces</option>
           </select>
           <input type="number" id="ind-val-${coin}" placeholder="valor" style="width:60px;padding:4px 6px;font-size:12px;border:1px solid #2e3340;border-radius:6px;background:#21252d;color:#e8ecf0;outline:none">
           <select id="ind-tf-${coin}" style="padding:4px 6px;font-size:12px;border:1px solid #2e3340;border-radius:6px;background:#21252d;color:#9aa0ab;outline:none">
@@ -1907,7 +1909,7 @@ function addIndAlert(coin){
   if(!typeEl||!tfEl)return;
   const type=typeEl.value;
   const tf=tfEl.value;
-  const hasVal=['rsi_low','rsi_high','score_up','score_down','bb_width_low','bb_pct_low','bb_pct_high','bb_width_high','bb_width_expansion'].includes(type);
+  const hasVal=['rsi_low','rsi_high','score_up','score_down','bb_width_low','bb_pct_low','bb_pct_high','bb_width_high','bb_width_expansion','spike_solo','spike_green'].includes(type);
   const val=hasVal?parseFloat(valEl?valEl.value:0):null;
   if(hasVal&&(isNaN(val)||val===null)){showToast('Ingresa un valor numérico','err');return;}
   if(!coinTriggers[coin])coinTriggers[coin]={};
@@ -1916,7 +1918,7 @@ function addIndAlert(coin){
   if(valEl)valEl.value='';
   if(stateLoaded)saveState();
   refreshIndList(coin); // only refresh the list, don't re-render everything
-  const typeLabels={rsi_low:'RSI <',rsi_high:'RSI >',score_up:'Score ≥',score_down:'Score ≤',obv_up:'OBV acum',obv_down:'OBV dist',bb_width_low:'BB Width <',bb_pct_low:'BB %B <',bb_pct_high:'BB %B >',bb_width_high:'BB Width >',bb_width_expansion:'BB Expansión'};
+  const typeLabels={rsi_low:'RSI <',rsi_high:'RSI >',score_up:'Score ≥',score_down:'Score ≤',obv_up:'OBV acum',obv_down:'OBV dist',bb_width_low:'BB Width <',bb_pct_low:'BB %B <',bb_pct_high:'BB %B >',bb_width_high:'BB Width >',bb_width_expansion:'BB Expansión',spike_solo:'⚡ Spike >',spike_green:'⚡ Spike Verde >'};
   showToast(`✅ ${coin}: ${typeLabels[type]||type} ${val!==null?val:''} (${tf})`);
 }
 
@@ -1931,9 +1933,9 @@ function refreshIndList(coin){
   const container=document.getElementById(`ind-list-${coin}`);
   if(!container)return;
   const indList=(coinTriggers[coin]&&coinTriggers[coin].ind_alerts)||[];
-  const typeLabels={rsi_low:'📉 RSI <',rsi_high:'📈 RSI >',score_up:'💎 Score ≥',score_down:'📉 Score ≤',obv_up:'↑ OBV acum',obv_down:'↓ OBV dist',bb_width_low:'🎯 BB Width <',bb_pct_low:'📉 BB %B <',bb_pct_high:'📈 BB %B >',bb_width_high:'📊 BB Width >',bb_width_expansion:'🚀 BB Expansión'};
+  const typeLabels={rsi_low:'📉 RSI <',rsi_high:'📈 RSI >',score_up:'💎 Score ≥',score_down:'📉 Score ≤',obv_up:'↑ OBV acum',obv_down:'↓ OBV dist',bb_width_low:'🎯 BB Width <',bb_pct_low:'📉 BB %B <',bb_pct_high:'📈 BB %B >',bb_width_high:'📊 BB Width >',bb_width_expansion:'🚀 BB Expansión',spike_solo:'⚡ Spike >',spike_green:'⚡ Spike Verde >'};
   container.innerHTML=indList.map((a,i)=>{
-    const hasVal=['rsi_low','rsi_high','score_up','score_down','bb_width_low','bb_pct_low','bb_pct_high','bb_width_high','bb_width_expansion'].includes(a.type);
+    const hasVal=['rsi_low','rsi_high','score_up','score_down','bb_width_low','bb_pct_low','bb_pct_high','bb_width_high','bb_width_expansion','spike_solo','spike_green'].includes(a.type);
     const valStr=hasVal?`<span style="color:#7bc142;font-weight:600">${a.val}</span>`:'';
     return`<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:#21252d;border-radius:6px;border:1px solid #2e3340;flex-wrap:wrap">
       <span style="font-size:12px;color:#c8cdd5">${typeLabels[a.type]||a.type}</span>
@@ -2182,6 +2184,22 @@ BB %B: ${pctVal}% > ${ia.val}% — precio cerca banda superior [${tf2}]`,
         fire(iaKey,
           `🚀 <b>BB EXPANSIÓN ${dir}</b>\n<b>${coin}/USDT</b> — $${px2}\nWidth: ${iad.bb.prevWidth.toFixed(2)}% → ${iad.bb.width.toFixed(2)}% (+${growthPct.toFixed(0)}%) [${tf2}]`,
           `${dirEmoji} ${coin} BB +${growthPct.toFixed(0)}% [${ia.tf}]`);
+      }
+    }
+    // Volume Spike — spike mayor a X veces promedio
+    if(ia.type==='spike_solo'&&iad.spike&&ia.val!==null){
+      if(iad.spike.ratio>=ia.val){
+        fire(iaKey,
+          `⚡ <b>VOLUME SPIKE</b>\n<b>${coin}/USDT</b> — $${px2}\nSpike: ${iad.spike.ratio.toFixed(1)}x > ${ia.val}x promedio [${tf2}]`,
+          `⚡ ${coin} Spike ${iad.spike.ratio.toFixed(1)}x [${ia.tf}]`);
+      }
+    }
+    // Volume Spike Verde — spike mayor a X veces + vela verde
+    if(ia.type==='spike_green'&&iad.spike&&ia.val!==null){
+      if(iad.spike.ratio>=ia.val&&iad.spike.up){
+        fire(iaKey,
+          `⚡ <b>SPIKE VERDE</b>\n<b>${coin}/USDT</b> — $${px2}\nSpike: ${iad.spike.ratio.toFixed(1)}x > ${ia.val}x + vela alcista [${tf2}]`,
+          `⚡ ${coin} Spike Verde ${iad.spike.ratio.toFixed(1)}x [${ia.tf}]`,'buy');
       }
     }
   }

@@ -478,12 +478,51 @@ def check_multi_tf(coin, default_tf, required_positive=2, min_score=2):
 
 # ============ BINANCE / EXCHANGES ============
 
+def check_binance_access():
+    """Quick ping para saber si Binance es accesible desde este runner."""
+    try:
+        r = requests.get(f"{BINANCE_BASE}/ping",
+                         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                         timeout=5)
+        if r.status_code == 200:
+            print("🌐 Binance: ✅ accesible")
+            return True
+        elif r.status_code in (403, 451):
+            print(f"🌐 Binance: ⚠️  bloqueado por IP/región ({r.status_code}) — usando fallbacks (OKX/KuCoin/Gate)")
+            return False
+        else:
+            print(f"🌐 Binance: ⚠️  status {r.status_code} — usando fallbacks")
+            return False
+    except Exception as e:
+        print(f"🌐 Binance: ⚠️  inaccesible ({e}) — usando fallbacks")
+        return False
+
+
 def fetch_realtime_price(symbol):
     """
-    Precio en tiempo real — Binance bloqueado en GitHub Actions (IPs AWS).
-    Usa OKX primero ya que funciona bien, luego KuCoin y Gate.io como respaldo.
+    Precio en tiempo real — Binance prioritario.
+    Si está bloqueado en GitHub Actions (IPs AWS → 403/451), cae a OKX → KuCoin → Gate.io.
     """
-    # 1. OKX — el más confiable desde GitHub Actions
+    # 1. Binance — fuente principal
+    try:
+        url = f"{BINANCE_BASE}/ticker/price"
+        params = {"symbol": f"{symbol}USDT"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        r = requests.get(url, params=params, headers=headers, timeout=8)
+        if r.status_code == 200:
+            data = r.json()
+            if "price" in data:
+                price = float(data["price"])
+                print(f"    [precio binance: ${price}]")
+                return price, "binance"
+        elif r.status_code in (403, 451):
+            print(f"    [binance precio: bloqueado por IP/región ({r.status_code}) → fallback]")
+        else:
+            print(f"    [binance precio: status {r.status_code} → fallback]")
+    except Exception as e:
+        print(f"    [binance precio excepcion: {e} → fallback]")
+
+    # 2. OKX — más confiable desde GitHub Actions
     try:
         url = "https://www.okx.com/api/v5/market/ticker"
         params = {"instId": f"{symbol}-USDT"}
@@ -500,7 +539,7 @@ def fetch_realtime_price(symbol):
     except Exception as e:
         print(f"    [okx excepcion: {e}]")
 
-    # 2. KuCoin
+    # 3. KuCoin
     try:
         url = "https://api.kucoin.com/api/v1/market/orderbook/level1"
         params = {"symbol": f"{symbol}-USDT"}
@@ -516,7 +555,7 @@ def fetch_realtime_price(symbol):
     except Exception as e:
         print(f"    [kucoin excepcion: {e}]")
 
-    # 3. Gate.io
+    # 4. Gate.io
     try:
         url = "https://api.gateio.ws/api/v4/spot/tickers"
         params = {"currency_pair": f"{symbol}_USDT"}
@@ -531,35 +570,25 @@ def fetch_realtime_price(symbol):
     except Exception as e:
         print(f"    [gate excepcion: {e}]")
 
-    # 4. Binance — ultimo intento (suele estar bloqueado en GitHub Actions)
-    try:
-        url = f"{BINANCE_BASE}/ticker/price"
-        params = {"symbol": f"{symbol}USDT"}
-        r = requests.get(url, params=params, timeout=8)
-        if r.status_code == 200:
-            data = r.json()
-            if "price" in data:
-                price = float(data["price"])
-                print(f"    [precio binance: ${price}]")
-                return price, "binance"
-        print(f"    [binance status: {r.status_code}]")
-    except Exception as e:
-        print(f"    [binance excepcion: {e}]")
-
     print(f"    ⚠️ TODOS los exchanges fallaron para {symbol} — usando close")
     return None, None
 
 def fetch_klines(symbol, interval="4h", limit=100):
-    # 1. Binance global
+    # 1. Binance — fuente principal
     try:
         url = f"{BINANCE_BASE}/klines"
         params = {"symbol": f"{symbol}USDT", "interval": interval, "limit": limit + 1}
-        r = requests.get(url, params=params, timeout=10)
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        r = requests.get(url, params=params, headers=headers, timeout=10)
         if r.status_code == 200:
             rows = r.json()[:-1]
             return [float(row[4]) for row in rows], [float(row[5]) for row in rows]
-    except:
-        pass
+        elif r.status_code in (403, 451):
+            print(f"    [binance klines: bloqueado por IP/región ({r.status_code}) → fallback]")
+        else:
+            print(f"    [binance klines: status {r.status_code} → fallback]")
+    except Exception as e:
+        print(f"    [binance klines excepcion: {e} → fallback]")
 
     # 2. OKX — funciona desde GitHub Actions
     try:
@@ -1212,6 +1241,35 @@ def check_coin(coin, default_tf, global_triggers, coin_triggers, prev_states,
                         f"Precio {'subiendo' if bb2['bullish'] else 'bajando'} — ${px}"
                     )
 
+        elif atype == "spike_solo" and aval is not None:
+            spk2 = calc_spike(v2, c2)
+            if spk2:
+                ratio_str = f"{spk2['ratio']:.1f}"
+                print(f"    — spike_solo({atf}): ratio={ratio_str}x (necesita >{aval}x)")
+                if spk2["ratio"] >= float(aval):
+                    mark_sent(coin, alert_key)
+                    send_telegram(
+                        f"⚡ <b>VOLUME SPIKE — {coin}</b>\n"
+                        f"Spike ({atf.upper()}): {spk2['ratio']:.1f}x > {aval}x promedio\n"
+                        f"VROC: {spk2['vroc']:+.0f}% — ${px}"
+                    )
+                    print(f"    ✅ spike_solo({atf}): {ratio_str}x → ALERTA")
+
+        elif atype == "spike_green" and aval is not None:
+            spk2 = calc_spike(v2, c2)
+            if spk2:
+                ratio_str = f"{spk2['ratio']:.1f}"
+                green_str = "🟢 verde" if spk2["up"] else "🔴 roja"
+                print(f"    — spike_green({atf}): ratio={ratio_str}x vela={green_str} (necesita >{aval}x + verde)")
+                if spk2["ratio"] >= float(aval) and spk2["up"]:
+                    mark_sent(coin, alert_key)
+                    send_telegram(
+                        f"⚡ <b>SPIKE VERDE — {coin}</b>\n"
+                        f"Spike ({atf.upper()}): {spk2['ratio']:.1f}x > {aval}x + vela alcista\n"
+                        f"VROC: {spk2['vroc']:+.0f}% — ${px}"
+                    )
+                    print(f"    ✅ spike_green({atf}): {ratio_str}x verde → ALERTA")
+
     # Guardar estados por TF
     new_state = {
         "price": price,
@@ -1241,6 +1299,9 @@ def run():
     print(f"\n{'='*55}")
     print(f"🚀 Scanner Bot v7 ML Enhanced — {now}")
     print(f"{'='*55}")
+
+    # ── Verificar acceso a Binance ───────────────────────────────
+    check_binance_access()
 
     # ── Entrenar ML ──────────────────────────────────────────────
     if ML_AVAILABLE and not ml_predictor.is_trained:

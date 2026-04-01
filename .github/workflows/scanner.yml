@@ -1,25 +1,35 @@
-name: Crypto Scanner Bot
+name: Crypto Screener
+
 on:
-  workflow_dispatch:   # sigue funcionando para activar manualmente
+  workflow_dispatch: # Activar manualmente desde la UI de GitHub
+
   schedule:
-    - cron: '*/5 * * * *'   # OPCIONAL: también corre solo cada 5 min
-                             # Si preferís seguir usando cron-job.org, borrá estas 2 líneas
+    - cron: "*/5 * * * *" # Cada 5 min (puede tener 5-15 min delay en horas pico)
+
+  # OPCIONAL: para máxima puntualidad, descomentá esto y configurá cron-job.org
+  # repository_dispatch:
+  #   types: [run-screener]
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 8
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
-        run: pip install requests scikit-learn numpy   # ← agregado scikit-learn y numpy
+        run: pip install requests pandas==2.2.3 ta
 
-      - name: Run scanner bot
-        run: python scanner_bot.py
+      - name: Run screener
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python screener.py
